@@ -1,0 +1,1 @@
+ALTER TABLE "bagis_aggregates" ADD COLUMN "month" char(7);

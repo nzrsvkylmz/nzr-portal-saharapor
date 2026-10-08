@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/*
+ * Nezir Kurumsal Kimlik 2026 renk token'ları.
+ * Oran kuralı 60-30-10: beyaz/krem zemin hâkim, Nezir Yeşili %30,
+ * vurgu (hasat/kehribar) yalnızca %10 — kehribar sadece kritik uyarı.
+ */
+@theme {
+  --color-primary: #00764b; /* Nezir Yeşili */
+  --color-primary-dark: #004d32; /* Derin Yeşil */
+  --color-mint: #c8edd9; /* Filiz — samimi iletişim */
+  --color-cream: #f5f0e8; /* Krem — rapor zeminleri */
+  --color-gold: #b99961; /* Hasat Altını — üst düzey vurgu */
+  --color-amber: #e8a838; /* Kehribar — yalnız kritik vurgu */
+  --color-ink: #2d3a35; /* Antrasit — metin */
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+}

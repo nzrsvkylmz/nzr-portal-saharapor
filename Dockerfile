@@ -17,7 +17,10 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/scripts/migrate.mjs ./scripts/migrate.mjs
-# migrate.mjs drizzle-orm'a ihtiyaç duyar; standalone node_modules'ta mevcut
+# migrate.mjs için drizzle-orm: Next onu sunucu paketine gömdüğünden standalone
+# node_modules'ta paket olarak YOKTUR; builder'dan kopyalanır (sıfır bağımlılık).
+# pg ve bağımlılıkları standalone çıktıda zaten mevcut.
+COPY --from=builder /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
 
 EXPOSE 3000
 CMD ["sh", "-c", "node scripts/migrate.mjs && node server.js"]

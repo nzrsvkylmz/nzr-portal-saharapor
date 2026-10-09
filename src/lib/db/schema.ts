@@ -227,6 +227,24 @@ export const plans = pgTable(
   (t) => [uniqueIndex("plans_month_bolge").on(t.month, t.bolgeLabel)],
 );
 
+/** İl temsilciliği (birim) bazlı aylık Genel Bağış hedefleri. */
+export const unitPlans = pgTable(
+  "unit_plans",
+  {
+    id: serial("id").primaryKey(),
+    month: char("month", { length: 7 }).notNull(), // '2026-10'
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => units.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    updatedBy: uuid("updated_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("unit_plans_month_unit").on(t.month, t.unitId)],
+);
+
 export const appSettings = pgTable("app_settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),

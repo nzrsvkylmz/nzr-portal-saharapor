@@ -18,8 +18,8 @@ export default async function AdminHome() {
     },
     isAdminBagis(user) && {
       href: "/admin/planlar",
-      title: "Aylık Planlar",
-      desc: "Bölge bazlı aylık bağış hedeflerini düzenle",
+      title: "Aylık Genel Bağış Planları",
+      desc: "Bölge ve il temsilciliği bazlı aylık hedefleri düzenle",
     },
     isSuper && {
       href: "/admin/birimler",

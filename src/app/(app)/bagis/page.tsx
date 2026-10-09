@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { canViewBagis, requireActiveUser } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
-import { bagisAggregates, plans, reportRuns } from "@/lib/db/schema";
+import { bagisAggregates, plans, reportRuns, unitPlans } from "@/lib/db/schema";
 import { visibleScope } from "@/lib/domain/scope";
 import { trDateToMonth, trMoney } from "@/lib/domain/normalize";
 import {
@@ -110,6 +110,15 @@ export default async function BagisPage({
   const planByBolge = new Map<string, number>();
   for (const r of planRows) {
     planByBolge.set(r.bolgeLabel, (planByBolge.get(r.bolgeLabel) ?? 0) + Number(r.amount));
+  }
+
+  // il temsilciliği hedefleri: aralıktaki ayların birim planları toplanır
+  const unitPlanRows = planMonths.length
+    ? await db.select().from(unitPlans).where(inArray(unitPlans.month, planMonths))
+    : [];
+  const planByUnit = new Map<number, number>();
+  for (const r of unitPlanRows) {
+    planByUnit.set(r.unitId, (planByUnit.get(r.unitId) ?? 0) + Number(r.amount));
   }
 
   const bolgeRows = aggRows
@@ -393,24 +402,37 @@ export default async function BagisPage({
                 <th className="px-4 py-2.5 font-medium">Birim</th>
                 <th className="px-4 py-2.5 font-medium">Bağış Adedi</th>
                 <th className="px-4 py-2.5 font-medium">Tutar</th>
+                {planVisible && <th className="px-4 py-2.5 font-medium">Aylık Plan</th>}
+                {planVisible && <th className="px-4 py-2.5 font-medium">Oran</th>}
               </tr>
             </thead>
             <tbody>
               {unitRows.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-ink/50">
+                  <td colSpan={planVisible ? 6 : 4} className="px-4 py-6 text-center text-ink/50">
                     Bu kapsamda bağış kaydı yok.
                   </td>
                 </tr>
               )}
-              {unitRows.map((r, i) => (
-                <tr key={`${r.bolgeLabel}|${r.unitLabel}`} className={i % 2 ? "bg-cream/60" : ""}>
-                  <td className="px-4 py-2 text-xs text-ink/50">{r.bolgeLabel}</td>
-                  <td className="px-4 py-2 font-medium">{r.unitLabel}</td>
-                  <td className="px-4 py-2">{r.donationCount}</td>
-                  <td className="px-4 py-2">{trMoney(Number(r.totalAmount))}</td>
-                </tr>
-              ))}
+              {unitRows.map((r, i) => {
+                const uPlan = r.unitId !== null ? (planByUnit.get(r.unitId) ?? null) : null;
+                return (
+                  <tr key={`${r.bolgeLabel}|${r.unitLabel}`} className={i % 2 ? "bg-cream/60" : ""}>
+                    <td className="px-4 py-2 text-xs text-ink/50">{r.bolgeLabel}</td>
+                    <td className="px-4 py-2 font-medium">{r.unitLabel}</td>
+                    <td className="px-4 py-2">{r.donationCount}</td>
+                    <td className="px-4 py-2">{trMoney(Number(r.totalAmount))}</td>
+                    {planVisible && (
+                      <td className="px-4 py-2">{uPlan ? trMoney(uPlan) : "—"}</td>
+                    )}
+                    {planVisible && (
+                      <td className="px-4 py-2">
+                        {oranBadge(uPlan && uPlan > 0 ? Number(r.totalAmount) / uPlan : null)}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

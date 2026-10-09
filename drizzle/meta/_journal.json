@@ -43,6 +43,13 @@
       "when": 1791460589023,
       "tag": "0005_rich_scrambler",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791555888942,
+      "tag": "0006_gorgeous_boomer",
+      "breakpoints": true
     }
   ]
 }

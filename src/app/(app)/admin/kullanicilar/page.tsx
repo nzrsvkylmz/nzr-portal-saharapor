@@ -8,6 +8,7 @@ import {
   importTemsilciler,
   updateUserAccess,
 } from "./actions";
+import { ImportButton } from "./ImportButton";
 
 const ROLE_OPTIONS = [
   ["", "— Rol seç —"],
@@ -213,28 +214,13 @@ export default async function KullanicilarPage({
         </div>
         <div className="flex flex-wrap gap-2">
           <form action={importBolgeMudurleri}>
-            <button
-              type="submit"
-              className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white"
-            >
-              ⇅ Bölge müdürlerini içe aktar
-            </button>
+            <ImportButton>⇅ Bölge müdürlerini içe aktar</ImportButton>
           </form>
           <form action={importMuhasebe}>
-            <button
-              type="submit"
-              className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white"
-            >
-              ⇅ Muhasebeyi içe aktar
-            </button>
+            <ImportButton>⇅ Muhasebeyi içe aktar</ImportButton>
           </form>
           <form action={importTemsilciler}>
-            <button
-              type="submit"
-              className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white"
-            >
-              ⇅ Temsilcileri içe aktar
-            </button>
+            <ImportButton>⇅ Temsilcileri içe aktar</ImportButton>
           </form>
         </div>
       </div>

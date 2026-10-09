@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 import { sessions, users, type User } from "@/lib/db/schema";
 
 export const SESSION_COOKIE = "saharapor_session";
-const SESSION_DAYS = 30;
+const SESSION_DAYS = 1;
 
 /** OTP adımı için kısa ömürlü imzalı "bekleyen kullanıcı" cookie'si. */
 export const PENDING_COOKIE = "saharapor_pending";

@@ -142,11 +142,17 @@ export default async function BagisPage({
     0,
   );
 
+  // Birime/bölgeye eşlenmeyen bağışlar (BELİRTİLMEMİŞ vb.): portalda birim
+  // seçilmeden girilen kayıtlar. Yalnız admin kartlarında genel toplama katılır.
+  const unnumbered = bolgeRows.filter((r) => !/^\d+\./.test(r.bolgeLabel));
+  const birimsizGelir = unnumbered.reduce((s, r) => s + Number(r.totalAmount), 0);
+  const birimsizAdet = unnumbered.reduce((s, r) => s + r.donationCount, 0);
+
   const scopeGelir = scope.all
-    ? toplamGelir
+    ? toplamGelir + birimsizGelir
     : unitRows.reduce((s, r) => s + Number(r.totalAmount), 0);
   const scopeAdet = scope.all
-    ? toplamAdet
+    ? toplamAdet + birimsizAdet
     : unitRows.reduce((s, r) => s + r.donationCount, 0);
 
   const seciliBolgeler = scope.all
@@ -236,15 +242,25 @@ export default async function BagisPage({
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <p className="text-xs text-ink/60">
-            {scope.all ? "Toplam Gelir (bölgeler)" : "Sorumluluk Alanı Geliri"}
+            {scope.all ? "Toplam Gelir" : "Sorumluluk Alanı Geliri"}
           </p>
           <p className="mt-1 text-2xl font-semibold text-primary-dark">
             {trMoney(scopeGelir)}
           </p>
+          {scope.all && birimsizGelir > 0 && (
+            <p className="mt-1 text-xs text-ink/60">
+              Bölgeler: {trMoney(toplamGelir)} · Belirtilmemiş: {trMoney(birimsizGelir)}
+            </p>
+          )}
         </div>
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <p className="text-xs text-ink/60">Bağış Adedi</p>
           <p className="mt-1 text-2xl font-semibold text-primary-dark">{scopeAdet}</p>
+          {scope.all && birimsizAdet > 0 && (
+            <p className="mt-1 text-xs text-ink/60">
+              Bölgeler: {toplamAdet} · Belirtilmemiş: {birimsizAdet}
+            </p>
+          )}
         </div>
         {scope.all && planVisible && (
           <div className="rounded-2xl bg-white p-5 shadow-sm">

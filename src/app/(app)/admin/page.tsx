@@ -26,6 +26,11 @@ export default async function AdminHome() {
       title: "Birimler",
       desc: "Organizasyon hiyerarşisi ve eşlenmeyen kayıtlar",
     },
+    isSuper && {
+      href: "/admin/kullanim",
+      title: "Kullanım Takibi",
+      desc: "Giriş logları: kim girdi, kim hiç girmedi — bölge bazlı saha raporu",
+    },
   ].filter(Boolean) as Array<{ href: string; title: string; desc: string }>;
 
   return (

@@ -92,8 +92,11 @@ export default async function BagisPage({
   const monthRows = rowsForMonthRange(allAggRows, ayA, ayB);
 
   // bağış şartı (faaliyet) filtresi: Tümü | Genel Bağış | Sadaka | …
+  // Saha rolleri (temsilci/bölge müdürü) yalnız Genel Bağış görür; şart
+  // seçimi ve diğer şartların verisi admin'e özeldir.
   const sartlar = sartList(allAggRows);
-  const sart = sartlar.includes(sp.sart ?? "") ? (sp.sart as string) : null;
+  let sart = sartlar.includes(sp.sart ?? "") ? (sp.sart as string) : null;
+  if (!scope.all && sartlar.includes("Genel Bağış")) sart = "Genel Bağış";
   const aggRows = rowsForSart(monthRows, sart);
   // plan hedefleri Genel Bağış içindir; diğer görünümlerde oran yanıltıcı olur.
   // (eski, şart kırılımı olmayan snapshot'larda önceki davranış korunur)
@@ -165,9 +168,11 @@ export default async function BagisPage({
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-primary-dark">Bağış Raporu</h1>
+          <h1 className="text-2xl font-semibold text-primary-dark">
+            {scope.all ? "Bağış Raporu" : "Genel Bağış Raporu"}
+          </h1>
           <p className="mt-1 text-sm text-ink/60">
-            {sartlar.length > 0 ? `${sart ?? "Tüm şartlar"} · ` : ""}
+            {sartlar.length > 0 && scope.all ? `${sart ?? "Tüm şartlar"} · ` : ""}
             {aylar.length > 0 ? ayLabel : `${p.dateA} – ${p.dateB} dönemi`} ·{" "}
             {fmtTime(run.finishedAt)} tarihinde güncellendi
           </p>
@@ -209,7 +214,7 @@ export default async function BagisPage({
             </button>
           </form>
         )}
-        {sartlar.length > 0 && (
+        {sartlar.length > 0 && scope.all && (
           <div className="flex flex-wrap gap-2 text-sm">
             {[null, ...sartlar].map((s) => {
               const qs = new URLSearchParams();
@@ -331,19 +336,15 @@ export default async function BagisPage({
                 {scope.all && (
                   <tr className="border-t-2 border-mint bg-mint/30 font-semibold">
                     <td className="px-4 py-2" />
-                    <td className="px-4 py-2">Toplam (Bölgeler)</td>
+                    <td className="px-4 py-2">Genel Toplam</td>
                     {planVisible && (
                       <td className="px-4 py-2">
                         {toplamPlan > 0 ? trMoney(toplamPlan) : "—"}
                       </td>
                     )}
-                    <td className="px-4 py-2">{trMoney(toplamGelir)}</td>
-                    {planVisible && (
-                      <td className="px-4 py-2">
-                        {oranBadge(toplamPlan > 0 ? toplamGelir / toplamPlan : null)}
-                      </td>
-                    )}
-                    <td className="px-4 py-2">{toplamAdet}</td>
+                    <td className="px-4 py-2">{trMoney(toplamGelir + birimsizGelir)}</td>
+                    {planVisible && <td className="px-4 py-2" />}
+                    <td className="px-4 py-2">{toplamAdet + birimsizAdet}</td>
                   </tr>
                 )}
               </tbody>

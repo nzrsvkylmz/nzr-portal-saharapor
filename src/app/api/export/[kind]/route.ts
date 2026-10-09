@@ -61,7 +61,9 @@ export async function GET(
     const monthRows = rowsForMonthRange(allAggRows, ayA, ayB);
     const sartlar = sartList(allAggRows);
     const sartParam = req.nextUrl.searchParams.get("sart") ?? "";
-    const sart = sartlar.includes(sartParam) ? sartParam : null;
+    let sart = sartlar.includes(sartParam) ? sartParam : null;
+    // saha rolleri yalnız Genel Bağış indirir (sayfadaki kuralla aynı)
+    if (!scope.all && sartlar.includes("Genel Bağış")) sart = "Genel Bağış";
     const aggRows = rowsForSart(monthRows, sart);
     const planMonths = monthsInRange(ayA, ayB);
     const planRows = planMonths.length

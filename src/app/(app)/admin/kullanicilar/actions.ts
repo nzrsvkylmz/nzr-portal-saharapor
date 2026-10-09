@@ -89,6 +89,96 @@ export async function updateUserAccess(formData: FormData): Promise<void> {
 }
 
 /**
+ * Tek kullanıcıyı elle kaydeder: toplu içe aktarma (144 hesap için portaldan
+ * tek tek detay okuma) yerine, portal nick'i bilinen yeni kişi doğrudan
+ * eklenir. Nick, Sistem Plus'taki kullanıcı adıyla birebir aynı olmalıdır;
+ * login eşleşmesi küçük harfe çevrilerek yapılır.
+ */
+export async function createManualUser(formData: FormData): Promise<void> {
+  const admin = await requireRole("SUPER_ADMIN");
+
+  let mesaj: string | null = null;
+  let hata: string | null = null;
+  try {
+    const nick = String(formData.get("nick") ?? "").trim().toLowerCase();
+    const displayName = String(formData.get("displayName") ?? "").trim();
+    const roleRaw = String(formData.get("role") ?? "");
+    const bolgeNoRaw = String(formData.get("bolgeNo") ?? "");
+    const addNames = formData
+      .getAll("addUnitNames")
+      .map((v) => String(v).trim())
+      .filter(Boolean);
+
+    if (!nick) throw new Error("Portal kullanıcı adı (nick) gerekli.");
+    const role = ROLES.includes(roleRaw as Role) ? (roleRaw as Role) : null;
+    const bolgeNo =
+      role === "BOLGE_MUDURU" && bolgeNoRaw ? Number(bolgeNoRaw) : null;
+    if (role === "BOLGE_MUDURU" && !bolgeNo) {
+      throw new Error("Bölge müdürü için bölge seçilmelidir.");
+    }
+
+    const unitIds: number[] = [];
+    if (addNames.length) {
+      const allUnits = await db.select().from(units);
+      for (const name of addNames) {
+        const hits = allUnits.filter((u) => u.active && norm(u.name) === norm(name));
+        if (hits.length === 0) throw new Error(`Birim bulunamadı: "${name}"`);
+        if (hits.length > 1) throw new Error(`Birden fazla birim eşleşti: "${name}"`);
+        if (!unitIds.includes(hits[0].id)) unitIds.push(hits[0].id);
+      }
+    }
+    if (role === "TEMSILCI" && unitIds.length === 0) {
+      throw new Error("Temsilci için en az bir birim seçilmelidir.");
+    }
+
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.portalNick, nick));
+    if (existing) {
+      throw new Error(
+        `"${nick}" zaten kayıtlı — aşağıdaki listede kartını bulup oradan düzenleyin.`,
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(users)
+        .values({
+          portalNick: nick,
+          displayName: displayName || nick,
+          role,
+          status: role ? "active" : "pending",
+          bolgeNo,
+        })
+        .returning({ id: users.id });
+      if (role === "TEMSILCI" && unitIds.length) {
+        await tx
+          .insert(userUnits)
+          .values(unitIds.map((unitId) => ({ userId: created.id, unitId })));
+      }
+      await tx.insert(auditLog).values({
+        userId: admin.id,
+        action: "user_manual_create",
+        detail: { nick, role, bolgeNo, unitIds },
+      });
+    });
+    mesaj =
+      `"${nick}" eklendi${role ? "" : " (yetki bekliyor)"}. ` +
+      "Kişi Sistem Plus şifresiyle ilk girişinde doğrudan kendi kapsamını görür.";
+  } catch (e) {
+    hata = e instanceof Error ? e.message : String(e);
+  }
+
+  revalidatePath("/admin/kullanicilar");
+  redirect(
+    hata
+      ? `/admin/kullanicilar?hata=${encodeURIComponent(hata)}`
+      : `/admin/kullanicilar?mesaj=${encodeURIComponent(mesaj ?? "")}`,
+  );
+}
+
+/**
  * Portaldan kullanıcı içe aktarma çekirdeği: hesap burada hiç giriş yapmamış
  * olsa da rolü (ve varsa bölgesi) hazır bekler; ilk girişinde doğrudan kendi
  * kapsamını görür. Mevcut kullanıcıların elle yapılmış ayarları EZİLMEZ

@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { units, userUnits, users } from "@/lib/db/schema";
 import {
+  createManualUser,
   importBolgeMudurleri,
   importMuhasebe,
   importTemsilciler,
@@ -242,6 +243,79 @@ export default async function KullanicilarPage({
             </option>
           ))}
       </datalist>
+
+      <details className="rounded-2xl bg-white p-5 shadow-sm">
+        <summary className="cursor-pointer font-heading text-lg font-semibold text-primary-dark">
+          ➕ Kullanıcıyı elle ekle
+        </summary>
+        <form
+          action={createManualUser}
+          className="mt-4 flex flex-wrap items-end gap-3 text-sm"
+        >
+          <label className="grid gap-1">
+            Portal kullanıcı adı
+            <input
+              name="nick"
+              required
+              placeholder="Sistem Plus nick"
+              className="w-44 rounded-lg border border-mint px-2 py-1"
+            />
+          </label>
+          <label className="grid gap-1">
+            Ad Soyad (isteğe bağlı)
+            <input
+              name="displayName"
+              className="w-44 rounded-lg border border-mint px-2 py-1"
+            />
+          </label>
+          <label className="grid gap-1">
+            Rol
+            <select
+              name="role"
+              defaultValue="TEMSILCI"
+              className="rounded-lg border border-mint px-2 py-1"
+            >
+              {ROLE_OPTIONS.map(([v, t]) => (
+                <option key={v} value={v}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1">
+            Bölge (müdür için)
+            <select name="bolgeNo" className="rounded-lg border border-mint px-2 py-1">
+              <option value="">—</option>
+              {bolgeler.map((b) => (
+                <option key={b} value={b}>
+                  {b}.BÖLGE
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1">
+            Birim (temsilci için)
+            <input
+              name="addUnitNames"
+              list="unit-options"
+              placeholder="yazarak ara"
+              className="w-56 rounded-lg border border-mint px-2 py-1"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-xl bg-primary px-4 py-2 font-semibold text-white transition hover:bg-primary-dark"
+          >
+            Ekle
+          </button>
+        </form>
+        <p className="mt-3 text-xs text-ink/50">
+          Kullanıcı adı Sistem Plus&apos;taki ile birebir aynı olmalıdır; kişi
+          ilk girişini kendi Sistem Plus şifresiyle yapar, burada şifre
+          tutulmaz. Temsilci için tek (üst) birim yeterlidir: bağışta alt
+          birimler hiyerarşiden otomatik gelir, yardım raporu da il bazındadır.
+        </p>
+      </details>
 
       {allUnits.length === 0 && (
         <p className="rounded-xl bg-amber/15 px-4 py-3 text-sm">

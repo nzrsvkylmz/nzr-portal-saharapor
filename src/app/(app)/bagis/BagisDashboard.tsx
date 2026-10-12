@@ -666,6 +666,7 @@ export default function BagisDashboard({
   units,
   monthly,
   admin,
+  initialBolge,
 }: {
   headerLabel: string;
   updatedAt: string;
@@ -677,9 +678,25 @@ export default function BagisDashboard({
   monthly: MonthPoint[];
   /** Yönetici modu: bölge özetleri + şart seçimi (drill-down ile illere inilir). */
   admin?: BagisAdminProps;
+  /** URL'den gelen bölge seçimi (şart/ay değişiminde seçim korunur). */
+  initialBolge?: string | null;
 }) {
   const [detailKey, setDetailKey] = useState<string | null>(null);
-  const [selBolge, setSelBolge] = useState<string | null>(null);
+  const [selBolge, setSelBolge] = useState<string | null>(
+    initialBolge && admin?.bolgeler.some((b) => b.label === initialBolge)
+      ? initialBolge
+      : null,
+  );
+  // bölge seçimini URL'e yansıt: GET formu ve şart linkleri seçimi taşısın
+  const selectBolge = (label: string | null) => {
+    setSelBolge(label);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (label) url.searchParams.set("bolge", label);
+      else url.searchParams.delete("bolge");
+      window.history.replaceState(null, "", url);
+    }
+  };
   const planVisible = admin ? admin.planVisible : true;
 
   const visUnits = admin && selBolge ? units.filter((u) => u.bolgeLabel === selBolge) : units;
@@ -735,10 +752,11 @@ export default function BagisDashboard({
   const siraliUnits = [...visUnits].sort((a, b) => b.amount - a.amount);
   const kartGorunumu = !admin || selBolge !== null;
 
-  // şart seçici linkleri (yönetici): ay aralığını koruyarak GET
+  // şart seçici linkleri (yönetici): ay aralığını VE bölge seçimini koruyarak GET
   const sartHref = (s: string | null) => {
     const qs = new URLSearchParams({ ayA, ayB });
     if (s) qs.set("sart", s);
+    if (selBolge) qs.set("bolge", selBolge);
     return `/bagis?${qs}`;
   };
 
@@ -760,6 +778,7 @@ export default function BagisDashboard({
         <div className="flex flex-wrap items-center gap-3">
           <form method="GET" className="flex flex-wrap items-center gap-2 text-sm">
             {admin?.sart && <input type="hidden" name="sart" value={admin.sart} />}
+            {selBolge && <input type="hidden" name="bolge" value={selBolge} readOnly />}
             <input
               name="ayA"
               type="month"
@@ -812,7 +831,7 @@ export default function BagisDashboard({
       {/* bölge seçiliyken geri dönüş */}
       {admin && selBolge && (
         <button
-          onClick={() => setSelBolge(null)}
+          onClick={() => selectBolge(null)}
           className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-medium text-primary shadow-sm transition hover:bg-mint/30"
         >
           {I.back()} Tüm bölgelere dön
@@ -921,7 +940,7 @@ export default function BagisDashboard({
             </h3>
             <GoalBars
               rows={goalRows}
-              onPick={admin && !selBolge ? (l) => setSelBolge(l) : undefined}
+              onPick={admin && !selBolge ? (l) => selectBolge(l) : undefined}
             />
           </div>
         )}
@@ -941,7 +960,7 @@ export default function BagisDashboard({
                 b={b}
                 i={i}
                 planVisible={planVisible}
-                onOpen={() => setSelBolge(b.label)}
+                onOpen={() => selectBolge(b.label)}
               />
             ))}
           </div>

@@ -636,6 +636,7 @@ export default function YardimDashboard({
   exportUrl,
   bolgeler,
   binsByBolge,
+  initialBolge,
 }: {
   headerLabel: string;
   updatedAt: string;
@@ -647,9 +648,25 @@ export default function YardimDashboard({
   /** Yönetici modu: bölge özetleri (drill-down ile temsilciliklere inilir). */
   bolgeler?: YardimBolge[];
   binsByBolge?: Record<string, WaitBin[]>;
+  /** URL'den gelen bölge seçimi (eşik değişiminde seçim korunur). */
+  initialBolge?: string | null;
 }) {
   const [detailKey, setDetailKey] = useState<string | null>(null);
-  const [selBolge, setSelBolge] = useState<string | null>(null);
+  const [selBolge, setSelBolge] = useState<string | null>(
+    initialBolge && bolgeler?.some((b) => b.label === initialBolge)
+      ? initialBolge
+      : null,
+  );
+  // bölge seçimini URL'e yansıt: eşik formu (GET) seçimi taşısın
+  const selectBolge = (label: string | null) => {
+    setSelBolge(label);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (label) url.searchParams.set("bolge", label);
+      else url.searchParams.delete("bolge");
+      window.history.replaceState(null, "", url);
+    }
+  };
   const admin = !!bolgeler;
 
   const visUnits = admin && selBolge ? units.filter((u) => u.bolge === selBolge) : units;
@@ -679,6 +696,7 @@ export default function YardimDashboard({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <form className="flex items-center gap-2 text-sm" method="GET">
+            {selBolge && <input type="hidden" name="bolge" value={selBolge} readOnly />}
             <label htmlFor="esik" className="text-ink/70">
               Kritik eşik
             </label>
@@ -707,7 +725,7 @@ export default function YardimDashboard({
       {/* bölge seçiliyken geri dönüş */}
       {admin && selBolge && (
         <button
-          onClick={() => setSelBolge(null)}
+          onClick={() => selectBolge(null)}
           className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-medium text-primary shadow-sm transition hover:bg-mint/30"
         >
           {I.back()} Tüm bölgelere dön
@@ -777,7 +795,7 @@ export default function YardimDashboard({
                     toplam: b.si + b.bk,
                     kritik: b.kritik,
                   }))}
-                  onPick={(l) => setSelBolge(l)}
+                  onPick={(l) => selectBolge(l)}
                 />
               </div>
             ) : (
@@ -807,7 +825,7 @@ export default function YardimDashboard({
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 lg:grid-cols-3">
                 {bolgeler!.map((b, i) => (
-                  <BolgeCard key={b.label} b={b} i={i} onOpen={() => setSelBolge(b.label)} />
+                  <BolgeCard key={b.label} b={b} i={i} onOpen={() => selectBolge(b.label)} />
                 ))}
               </div>
             </section>

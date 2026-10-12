@@ -420,6 +420,7 @@ export default async function BagisPage({
       exportUrl={exportUrl}
       units={dashUnits}
       monthly={adminMonthly}
+      initialBolge={sp.bolge ?? null}
       admin={{
         bolgeler: adminBolgeler,
         sartlar,

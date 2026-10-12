@@ -304,6 +304,7 @@ export default async function YardimPage({
         bins={bins}
         binsByBolge={binsByBolge}
         bolgeler={adminBolgeler}
+        initialBolge={sp.bolge ?? null}
         exportUrl={`/api/export/yardim?esik=${esik}`}
       />
 

@@ -34,6 +34,20 @@ function stripBom(s: string): string {
   return s.replace(/^﻿/, "");
 }
 
+// Portal, yönetici şifre sıfırlamasından sonra ilk girişte zorunlu şifre
+// yenileme sayfasına yönlendirebilir; bu durumda uygulama girişi yapılamaz.
+const RENEW_HINT =
+  "Sistem Plus şifre yenileme istiyor olabilir: portalı ayrı bir sekmede açıp " +
+  "giriş yapın, istenirse şifrenizi yenileyin, sonra buradan yeni şifrenizle " +
+  "tekrar deneyin.";
+
+/** Sayfa içeriği zorunlu şifre yenileme/değiştirme ekranına benziyor mu? */
+function looksLikePasswordRenew(pageLow: string): boolean {
+  return /(şifre|sifre|parola)[\s\S]{0,120}?(yenile|değiştir|degistir|belirle|güncelle|guncelle)/.test(
+    pageLow,
+  );
+}
+
 export class NezirClient {
   // Oturum yoklaması: sorgu çalıştırmayan hafif filtre paneli.
   static PROBE_PATH = "/crea/relief/application/filter/index";
@@ -181,7 +195,23 @@ export class NezirClient {
     }
     if (!redirect) {
       this.clearSession();
+      // Yönlendirme yoksa portal büyük olasılıkla sayfa içinde bir form
+      // döndürdü; şifre yenileme formuysa kullanıcıya net yol gösterilir.
+      if (looksLikePasswordRenew(body.toLowerCase())) {
+        throw new RemoteError("Portal şifre yenileme istiyor. " + RENEW_HINT);
+      }
       throw new RemoteError("Login cevabı beklenen biçimde değil: " + body.slice(0, 200));
+    }
+
+    // Şifre doğru kabul edildi ama hedef bir şifre yenileme sayfasıysa
+    // (örn. /renew, /password) oturum kurulamaz; erken ve anlaşılır hata ver.
+    const rlow = redirect.toLowerCase();
+    if (!rlow.includes("/verify") && /renew|reset|pass|sifre|parola/.test(rlow)) {
+      this.clearSession();
+      throw new RemoteError(
+        "Giriş kabul edildi ancak portal şifre yenileme sayfasına yönlendirdi. " +
+          RENEW_HINT,
+      );
     }
 
     r = await this.request("GET", redirect, { follow: true });
@@ -195,8 +225,14 @@ export class NezirClient {
       if (state === "authenticated") return "authenticated";
       if (state !== "verify") {
         this.clearSession();
+        if (looksLikePasswordRenew(r.text.toLowerCase())) {
+          throw new RemoteError("Portal şifre yenileme istiyor. " + RENEW_HINT);
+        }
         throw new RemoteError(
-          "Giriş kabul edildi ancak oturum doğrulanamadı. Durum: " + state,
+          "Giriş kabul edildi ancak oturum doğrulanamadı. Durum: " +
+            state +
+            ". " +
+            RENEW_HINT,
         );
       }
       return "verify";

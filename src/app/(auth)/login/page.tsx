@@ -12,12 +12,14 @@ export default function LoginPage() {
   const [pass, setPass] = useState("");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
+  const [portalHint, setPortalHint] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function submitCredentials(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
+    setPortalHint(false);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -27,6 +29,9 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Giriş başarısız.");
+        // 401 = Sistem Plus girişi reddetti (yanlış şifre, zorunlu şifre
+        // yenileme vb.) → kullanıcıyı önce portalda denemeye yönlendir.
+        setPortalHint(res.status === 401);
       } else if (data.needsOtp) {
         setStep("otp");
       } else {
@@ -120,6 +125,22 @@ export default function LoginPage() {
                 />
               </div>
               {error && <p className="text-sm text-red-700">{error}</p>}
+              {portalHint && (
+                <div className="rounded-xl border border-amber/40 bg-amber/10 p-3 text-xs leading-relaxed text-ink/80">
+                  Girişiniz Sistem Plus tarafından kabul edilmedi. Önce portalı
+                  ayrı bir sekmede açıp giriş yapabildiğinizi doğrulayın; şifre
+                  yenilemeniz isteniyorsa orada yenileyin, ardından buradan yeni
+                  şifrenizle tekrar deneyin.{" "}
+                  <a
+                    href="https://nezir.sistem.plus/login"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    Sistem Plus&apos;ı aç ↗
+                  </a>
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={busy}

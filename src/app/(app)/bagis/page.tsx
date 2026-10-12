@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { canViewBagis, requireActiveUser } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
-import { bagisAggregates, plans, reportRuns, unitPlans } from "@/lib/db/schema";
+import { bagisAggregates, plans, reportRuns, unitPlans, units } from "@/lib/db/schema";
 import { visibleScope } from "@/lib/domain/scope";
 import { trDateToMonth, trMoney } from "@/lib/domain/normalize";
 import {
@@ -13,6 +13,7 @@ import {
   sartList,
 } from "@/lib/domain/bagis-view";
 import type { BagisParams } from "@/lib/jobs/bagis-job";
+import UnitTable, { type UnitChildRow, type UnitGroupRow } from "./UnitTable";
 
 export const dynamic = "force-dynamic";
 
@@ -144,6 +145,129 @@ export default async function BagisPage({
         bolgeOrder(a.bolgeLabel) - bolgeOrder(b.bolgeLabel) ||
         Number(b.totalAmount) - Number(a.totalAmount),
     );
+
+  // İl–ilçe hiyerarşisi: unit satırları üst (il) temsilciliği altında
+  // gruplanır; ilin planı ve oranı kendi + ilçe bağışlarının birleşik
+  // toplamı üzerinden hesaplanır. Üst birim = parent zinciri boyunca en
+  // üstteki, bölge müdürlüğü olmayan birim (Kocaeli-Gölcük gibi il
+  // statüsündekiler kendi başına kalır).
+  const allUnits = await db
+    .select({
+      id: units.id,
+      name: units.name,
+      parentUnitId: units.parentUnitId,
+      bolgeLabel: units.bolgeLabel,
+      isBolgeMudurlugu: units.isBolgeMudurlugu,
+      active: units.active,
+    })
+    .from(units);
+  const unitById = new Map(allUnits.map((u) => [u.id, u]));
+  const topOf = (id: number) => {
+    let cur = unitById.get(id);
+    const seen = new Set<number>();
+    while (cur && cur.parentUnitId != null && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      const parent = unitById.get(cur.parentUnitId);
+      if (!parent || parent.isBolgeMudurlugu) break;
+      cur = parent;
+    }
+    return cur ?? null;
+  };
+
+  type GroupDraft = UnitGroupRow & { own: UnitChildRow | null };
+  const groupMap = new Map<string, GroupDraft>();
+  for (const r of unitRows) {
+    const amount = Number(r.totalAmount);
+    const top = r.unitId !== null ? topOf(r.unitId) : null;
+    const key = top ? `u${top.id}` : `l|${r.bolgeLabel}|${r.unitLabel ?? ""}`;
+    let g = groupMap.get(key);
+    if (!g) {
+      g = {
+        key,
+        bolgeLabel: r.bolgeLabel,
+        label: top ? top.name : (r.unitLabel ?? "—"),
+        count: 0,
+        amount: 0,
+        plan: top ? (planByUnit.get(top.id) ?? null) : null,
+        children: [],
+        own: null,
+      };
+      groupMap.set(key, g);
+    }
+    g.count += r.donationCount;
+    g.amount += amount;
+    if (top && top.id !== r.unitId) {
+      const childPlan = r.unitId !== null ? (planByUnit.get(r.unitId) ?? null) : null;
+      if (childPlan) g.plan = (g.plan ?? 0) + childPlan;
+      g.children.push({
+        key: `c${r.unitId}`,
+        label: r.unitLabel ?? "—",
+        count: r.donationCount,
+        amount,
+        plan: childPlan,
+      });
+    } else {
+      g.own = {
+        key: `${key}-own`,
+        label: "",
+        count: r.donationCount,
+        amount,
+        plan: null,
+      };
+    }
+  }
+
+  // Planı olup bu aralıkta hiç bağışı olmayan il temsilcilikleri de %0
+  // oranıyla listelenir (yalnız kapsam içindekiler).
+  if (planVisible) {
+    for (const [unitId, plan] of planByUnit) {
+      if (plan <= 0 || groupMap.has(`u${unitId}`)) continue;
+      const u = unitById.get(unitId);
+      if (!u || !u.active || topOf(unitId)?.id !== unitId) continue;
+      const visible = scope.all
+        ? !sp.bolge || u.bolgeLabel === sp.bolge
+        : user.role === "BOLGE_MUDURU"
+          ? u.bolgeLabel !== null && scope.bolgeLabels.includes(u.bolgeLabel)
+          : scope.unitIds.includes(unitId);
+      if (!visible) continue;
+      groupMap.set(`u${unitId}`, {
+        key: `u${unitId}`,
+        bolgeLabel: u.bolgeLabel ?? "—",
+        label: u.name,
+        count: 0,
+        amount: 0,
+        plan,
+        children: [],
+        own: null,
+      });
+    }
+  }
+
+  const unitGroups: UnitGroupRow[] = [...groupMap.values()]
+    .map((g) => {
+      const children = [...g.children].sort((a, b) => b.amount - a.amount);
+      if (g.own && children.length > 0) {
+        children.unshift({ ...g.own, label: `${g.label} (il geneli)` });
+      }
+      return {
+        key: g.key,
+        bolgeLabel: g.bolgeLabel,
+        label: g.label,
+        count: g.count,
+        amount: g.amount,
+        plan: g.plan,
+        children,
+      };
+    })
+    .sort(
+      (a, b) =>
+        bolgeOrder(a.bolgeLabel) - bolgeOrder(b.bolgeLabel) || b.amount - a.amount,
+    );
+
+  // saha rolleri için sorumluluk alanı plan toplamı (kart + oran)
+  const scopePlan = scope.all
+    ? 0
+    : unitGroups.reduce((s, g) => s + (g.plan ?? 0), 0);
 
   // toplam satırı yalnız numaralı bölgeleri sayar (DİĞER/BELİRTİLMEMİŞ hariç)
   const numbered = bolgeRows.filter((r) => /^\d+\./.test(r.bolgeLabel));
@@ -287,6 +411,15 @@ export default async function BagisPage({
             )}
           </div>
         )}
+        {!scope.all && planVisible && scopePlan > 0 && (
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <p className="text-xs text-ink/60">Plan ({ayLabel})</p>
+            <p className="mt-1 text-2xl font-semibold text-primary-dark">
+              {trMoney(scopePlan)}
+            </p>
+            <p className="mt-1 text-xs">{oranBadge(scopeGelir / scopePlan)}</p>
+          </div>
+        )}
       </div>
 
       {(scope.all || user.role === "BOLGE_MUDURU") && bolgeRows.length > 0 && (
@@ -395,48 +528,14 @@ export default async function BagisPage({
           )}
         </div>
         <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-primary text-left text-white">
-                <th className="px-4 py-2.5 font-medium">Bölge</th>
-                <th className="px-4 py-2.5 font-medium">Birim</th>
-                <th className="px-4 py-2.5 font-medium">Bağış Adedi</th>
-                <th className="px-4 py-2.5 font-medium">Tutar</th>
-                {planVisible && <th className="px-4 py-2.5 font-medium">Aylık Plan</th>}
-                {planVisible && <th className="px-4 py-2.5 font-medium">Oran</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {unitRows.length === 0 && (
-                <tr>
-                  <td colSpan={planVisible ? 6 : 4} className="px-4 py-6 text-center text-ink/50">
-                    Bu kapsamda bağış kaydı yok.
-                  </td>
-                </tr>
-              )}
-              {unitRows.map((r, i) => {
-                const uPlan = r.unitId !== null ? (planByUnit.get(r.unitId) ?? null) : null;
-                return (
-                  <tr key={`${r.bolgeLabel}|${r.unitLabel}`} className={i % 2 ? "bg-cream/60" : ""}>
-                    <td className="px-4 py-2 text-xs text-ink/50">{r.bolgeLabel}</td>
-                    <td className="px-4 py-2 font-medium">{r.unitLabel}</td>
-                    <td className="px-4 py-2">{r.donationCount}</td>
-                    <td className="px-4 py-2">{trMoney(Number(r.totalAmount))}</td>
-                    {planVisible && (
-                      <td className="px-4 py-2">{uPlan ? trMoney(uPlan) : "—"}</td>
-                    )}
-                    {planVisible && (
-                      <td className="px-4 py-2">
-                        {oranBadge(uPlan && uPlan > 0 ? Number(r.totalAmount) / uPlan : null)}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <UnitTable
+            groups={unitGroups}
+            planVisible={planVisible}
+            defaultOpen={user.role === "TEMSILCI"}
+          />
         </div>
         <p className="mt-2 text-xs text-ink/50">
+          İl satırları ilçe kırılımlarını da kapsar; satıra tıklayınca kırılım açılır.
           &quot;… Merkez&quot; satırları bölge müdürlüğü üzerinden kabul edilen bağışlardır.
         </p>
       </section>

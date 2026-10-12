@@ -8,6 +8,7 @@ import { toTrDate } from "@/lib/domain/normalize";
 import { BASE_URL } from "@/lib/portal/client";
 import { DEFAULT_FLOW, portalLink } from "@/lib/portal/relief";
 import YardimTable, { type YardimNode, type YardimUnitRow } from "./YardimTable";
+import YardimDashboard, { type WaitBin } from "./YardimDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -211,7 +212,21 @@ export default async function YardimPage({
     ) {
       children = children[0].children;
     }
+    // en uzun bekleyenler: yerleşim/mahalle etiketiyle ilk 5 (saha dashboard'u)
+    const waits: { gun: number; yer: string }[] = [];
+    for (const d of [siD, bkD]) {
+      for (const [y, mahMap] of Object.entries(d)) {
+        for (const [m, days] of Object.entries(mahMap)) {
+          const ayni = y.toLocaleLowerCase("tr") === (tems ?? "").toLocaleLowerCase("tr");
+          const yer =
+            m === "Belirtilmemiş" ? y : ayni ? m : `${y} · ${m}`;
+          for (const gun of days) if (gun >= 0) waits.push({ gun, yer });
+        }
+      }
+    }
+    const topWaits = waits.sort((a, z) => z.gun - a.gun).slice(0, 5);
     return {
+      topWaits,
       key: b.label,
       bolge: bolge ?? "",
       tems: tems ?? "",
@@ -236,6 +251,48 @@ export default async function YardimPage({
             (Number(/^(\d+)/.exec(b!)?.[1]) || 999),
         )
     : [];
+
+  // Saha rolleri (bölge müdürü / temsilci): kart + grafik dashboard'u.
+  if (!scope.all) {
+    const b1 = Math.max(1, Math.round(esik / 3));
+    const b2 = Math.max(b1 + 1, Math.round((2 * esik) / 3));
+    const binDefs = [
+      { label: `0–${b1}`, min: 0, max: b1 },
+      { label: `${b1 + 1}–${b2}`, min: b1 + 1, max: b2 },
+      { label: `${b2 + 1}–${esik}`, min: b2 + 1, max: esik },
+      { label: `${esik}+`, min: esik + 1, max: Infinity },
+    ];
+    const bins: WaitBin[] = binDefs.map((d) => ({ label: d.label, si: 0, bk: 0 }));
+    for (const b of birimler) {
+      for (const [stage, days] of [
+        ["si", b.si?.days ?? []],
+        ["bk", b.bk?.days ?? []],
+      ] as const) {
+        for (const gun of days) {
+          if (gun < 0) continue;
+          const i = binDefs.findIndex((d) => gun >= d.min && gun <= d.max);
+          if (i !== -1) bins[i][stage] += 1;
+        }
+      }
+    }
+    const headerLabel =
+      user.role === "BOLGE_MUDURU"
+        ? `${scope.bolgeLabels[0] ?? ""} · Saha Görünümü`
+        : detayRows.length === 1
+          ? `${detayRows[0].tems} Temsilciliği`
+          : "Temsilcilik Görünümü";
+    return (
+      <YardimDashboard
+        headerLabel={headerLabel}
+        updatedAt={fmtTime(run.finishedAt)}
+        taranan={run.rowCount ?? 0}
+        esik={esik}
+        units={detayRows}
+        bins={bins}
+        exportUrl={`/api/export/yardim?esik=${esik}`}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">

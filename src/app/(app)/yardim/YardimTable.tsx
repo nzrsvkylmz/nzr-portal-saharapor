@@ -31,6 +31,8 @@ export interface YardimUnitRow {
   portalAllUrl: string | null;
   portalKritikUrl: string | null;
   children: YardimNode[];
+  /** Saha dashboard'u için: en uzun bekleyen başvurular (gün + yer etiketi). */
+  topWaits?: { gun: number; yer: string }[];
 }
 
 function kritikBadge(n: number) {

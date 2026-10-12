@@ -14,6 +14,10 @@ import {
 } from "@/lib/domain/bagis-view";
 import type { BagisParams } from "@/lib/jobs/bagis-job";
 import UnitTable, { type UnitChildRow, type UnitGroupRow } from "./UnitTable";
+import BagisDashboard, {
+  type BagisDashUnit,
+  type MonthPoint,
+} from "./BagisDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -268,6 +272,102 @@ export default async function BagisPage({
   const scopePlan = scope.all
     ? 0
     : unitGroups.reduce((s, g) => s + (g.plan ?? 0), 0);
+
+  // Saha rolleri (bölge müdürü / temsilci): kart + grafik dashboard'u.
+  if (!scope.all) {
+    // Aylık trend: depodaki TÜM ayların kapsam içi Genel Bağış satırları
+    const sahaMonthRows = allAggRows.filter((r) => {
+      if (r.scope !== "unit" || r.month === null) return false;
+      if (sart && r.activity !== sart) return false;
+      if (user.role === "BOLGE_MUDURU") return scope.bolgeLabels.includes(r.bolgeLabel);
+      return (
+        (r.unitId !== null && scope.unitIds.includes(r.unitId)) ||
+        scope.unitLabels.includes(r.unitLabel ?? "")
+      );
+    });
+    const aylarAsc = [...new Set(sahaMonthRows.map((r) => r.month!))].sort();
+
+    // kapsamdaki üst (il) birimler ve tüm ayların plan hedefleri
+    const groupIds = new Set(
+      unitGroups
+        .filter((g) => g.key.startsWith("u"))
+        .map((g) => Number(g.key.slice(1))),
+    );
+    const trendPlanRows = aylarAsc.length
+      ? await db.select().from(unitPlans).where(inArray(unitPlans.month, aylarAsc))
+      : [];
+    const planByMonth = new Map<string, number>();
+    const planByUnitMonth = new Map<string, number>();
+    for (const r of trendPlanRows) {
+      const top = topOf(r.unitId);
+      if (!top || !groupIds.has(top.id)) continue;
+      planByMonth.set(r.month, (planByMonth.get(r.month) ?? 0) + Number(r.amount));
+      const k = `${top.id}|${r.month}`;
+      planByUnitMonth.set(k, (planByUnitMonth.get(k) ?? 0) + Number(r.amount));
+    }
+
+    const monthlyTotal = new Map<string, number>();
+    const monthlyByGroup = new Map<number, Map<string, number>>();
+    for (const r of sahaMonthRows) {
+      const amt = Number(r.totalAmount);
+      monthlyTotal.set(r.month!, (monthlyTotal.get(r.month!) ?? 0) + amt);
+      const top = r.unitId !== null ? topOf(r.unitId) : null;
+      if (top) {
+        const m = monthlyByGroup.get(top.id) ?? new Map<string, number>();
+        m.set(r.month!, (m.get(r.month!) ?? 0) + amt);
+        monthlyByGroup.set(top.id, m);
+      }
+    }
+    const monthly: MonthPoint[] = aylarAsc.map((ay) => ({
+      ay,
+      amount: monthlyTotal.get(ay) ?? 0,
+      plan: planByMonth.get(ay) ?? 0,
+    }));
+
+    const dashUnits: BagisDashUnit[] = unitGroups.map((g) => {
+      const id = g.key.startsWith("u") ? Number(g.key.slice(1)) : null;
+      return {
+        key: g.key,
+        label: g.label,
+        bolgeLabel: g.bolgeLabel,
+        amount: g.amount,
+        count: g.count,
+        plan: g.plan,
+        children: g.children.map((c) => ({
+          label: c.label,
+          amount: c.amount,
+          count: c.count,
+          plan: c.plan,
+        })),
+        monthly: aylarAsc.map((ay) => ({
+          ay,
+          amount: id !== null ? (monthlyByGroup.get(id)?.get(ay) ?? 0) : 0,
+          plan: id !== null ? (planByUnitMonth.get(`${id}|${ay}`) ?? 0) : 0,
+        })),
+      };
+    });
+
+    const headerLabel =
+      user.role === "BOLGE_MUDURU"
+        ? `${scope.bolgeLabels[0] ?? ""} · Saha Görünümü`
+        : dashUnits.length === 1
+          ? `${dashUnits[0].label} Temsilciliği`
+          : "Temsilcilik Görünümü";
+    const exportQs = new URLSearchParams({ ayA, ayB });
+    if (sart) exportQs.set("sart", sart);
+    return (
+      <BagisDashboard
+        headerLabel={headerLabel}
+        updatedAt={fmtTime(run.finishedAt)}
+        ayA={ayA}
+        ayB={ayB}
+        ayLabel={ayLabel}
+        exportUrl={`/api/export/bagis?${exportQs}`}
+        units={dashUnits}
+        monthly={monthly}
+      />
+    );
+  }
 
   // toplam satırı yalnız numaralı bölgeleri sayar (DİĞER/BELİRTİLMEMİŞ hariç)
   const numbered = bolgeRows.filter((r) => /^\d+\./.test(r.bolgeLabel));

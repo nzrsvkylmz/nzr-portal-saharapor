@@ -28,12 +28,15 @@ function stripe(ws: ExcelJS.Worksheet, startRow: number) {
 }
 
 export interface BagisExcelRow {
+  seviye: "bolge" | "il" | "ilce";
   bolge: string;
-  birim: string | null; // null → bölge özet satırı
-  plan: number | null;
-  gelir: number;
+  birim: string | null; // bölge özet satırında null
+  plan: number | null; // aylık plan (seçili aralık toplamı)
+  gelir: number; // il satırında ilçeler dahil birleşik toplam
   adet: number;
 }
+
+const MINT = "FFC8EDD9"; // Filiz — bölge özet satırı zemini
 
 export async function buildBagisXlsx(
   title: string,
@@ -42,41 +45,58 @@ export async function buildBagisXlsx(
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Bağış Raporu");
+  const colCount = includePlan ? 6 : 4;
   ws.addRow([title]);
-  ws.mergeCells(1, 1, 1, includePlan ? 7 : 5);
+  ws.mergeCells(1, 1, 1, colCount);
   ws.getCell(1, 1).font = { bold: true, size: 13, color: { argb: GREEN } };
 
   const header = includePlan
-    ? ["Sıra", "Bölge", "Birim", "Aylık Plan", "Gerçekleşen", "Oran", "Adet"]
-    : ["Sıra", "Bölge", "Birim", "Tutar", "Adet"];
+    ? ["Bölge", "Birim", "Aylık Plan", "Gerçekleşen", "Oran", "Adet"]
+    : ["Bölge", "Birim", "Tutar", "Adet"];
   styleHeader(ws.addRow(header));
 
-  rows.forEach((r, i) => {
-    if (includePlan) {
-      const oran = r.plan && r.plan > 0 ? r.gelir / r.plan : null;
-      ws.addRow([i + 1, r.bolge, r.birim ?? "—", r.plan ?? "", r.gelir, oran ?? "", r.adet]);
-    } else {
-      ws.addRow([i + 1, r.bolge, r.birim ?? "—", r.gelir, r.adet]);
-    }
-  });
-  stripe(ws, 3);
+  for (const r of rows) {
+    const birimText =
+      r.seviye === "bolge"
+        ? "BÖLGE TOPLAMI"
+        : r.seviye === "il"
+          ? (r.birim ?? "—")
+          : `    └ ${r.birim ?? "—"}`;
+    const oran = r.plan && r.plan > 0 ? r.gelir / r.plan : null;
+    const row = includePlan
+      ? ws.addRow([r.bolge, birimText, r.plan ?? "", r.gelir, oran ?? "", r.adet])
+      : ws.addRow([r.bolge, birimText, r.gelir, r.adet]);
 
-  ws.getColumn(1).width = 6;
-  ws.getColumn(2).width = 14;
-  ws.getColumn(3).width = 28;
-  if (includePlan) {
-    ws.getColumn(4).numFmt = '#,##0.00 "₺"';
-    ws.getColumn(5).numFmt = '#,##0.00 "₺"';
-    ws.getColumn(6).numFmt = "0.0%";
-    ws.getColumn(4).width = 16;
-    ws.getColumn(5).width = 16;
-    ws.getColumn(6).width = 10;
-    ws.getColumn(7).width = 8;
-  } else {
-    ws.getColumn(4).numFmt = '#,##0.00 "₺"';
-    ws.getColumn(4).width = 16;
-    ws.getColumn(5).width = 8;
+    if (r.seviye === "bolge") {
+      row.eachCell((cell) => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: MINT } };
+        cell.font = { bold: true, color: { argb: "FF004D32" } };
+      });
+    } else if (r.seviye === "il") {
+      row.getCell(2).font = { bold: true };
+    } else {
+      row.eachCell((cell) => {
+        cell.font = { color: { argb: "FF5A6660" } };
+      });
+    }
   }
+
+  ws.getColumn(1).width = 14;
+  ws.getColumn(2).width = 34;
+  if (includePlan) {
+    ws.getColumn(3).numFmt = '#,##0.00 "₺"';
+    ws.getColumn(4).numFmt = '#,##0.00 "₺"';
+    ws.getColumn(5).numFmt = "0.0%";
+    ws.getColumn(3).width = 16;
+    ws.getColumn(4).width = 16;
+    ws.getColumn(5).width = 10;
+    ws.getColumn(6).width = 8;
+  } else {
+    ws.getColumn(3).numFmt = '#,##0.00 "₺"';
+    ws.getColumn(3).width = 16;
+    ws.getColumn(4).width = 8;
+  }
+  ws.views = [{ state: "frozen", ySplit: 2 }];
 
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

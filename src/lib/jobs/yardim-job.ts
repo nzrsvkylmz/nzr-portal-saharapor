@@ -20,7 +20,6 @@ import { norm } from "@/lib/domain/normalize";
 export interface YardimParams {
   flow?: string; // varsayılan '23,179'
   stages?: StageDef[]; // varsayılan si+bk
-  thresholdDays?: number; // bilgi amaçlı; kritik sayım okuma anında hesaplanır
 }
 
 type Progress = (pct: number, msg: string) => Promise<void>;

@@ -85,9 +85,8 @@ export async function POST(
       pool: String(body.pool ?? "1"),
     };
   } else {
-    jobParams = {
-      thresholdDays: Number(body.thresholdDays) > 0 ? Number(body.thresholdDays) : 90,
-    };
+    // Yardım çekimi parametresizdir; kritik eşik okuma anında hesaplanır.
+    jobParams = {};
   }
 
   try {

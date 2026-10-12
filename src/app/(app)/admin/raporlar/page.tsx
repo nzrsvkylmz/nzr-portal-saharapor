@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { requireActiveUser, isAdminBagis, isAdminYardim } from "@/lib/auth/dal";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { appSettings, portalSessions, reportRuns } from "@/lib/db/schema";
+import { portalSessions, reportRuns } from "@/lib/db/schema";
 import { BagisForm, YardimForm } from "./forms";
 
 function fmtTime(d: Date | null): string {
@@ -14,31 +14,16 @@ function fmtTime(d: Date | null): string {
   }).format(d);
 }
 
-interface CachedFilters {
-  activities: Array<[string, string]>;
-  pools: Array<[string, string]>;
-  types: Array<[string, string]>;
-}
-
 /**
  * İlk aşamada yalnızca bu faaliyetler ve Serbest fon raporlanır
  * (portal ID'leri: bagis-demo/storage/filters.json ile doğrulandı).
+ * Bağış türleri sabittir (1-5; SMS ve Ayni hariç) ve formdan seçilmez.
  */
 const ALLOWED_ACTIVITIES: Array<[string, string]> = [
   ["1", "Genel Bağış"],
   ["15", "Sadaka"],
 ];
 const ALLOWED_POOLS: Array<[string, string]> = [["1", "Serbest"]];
-
-const DEFAULT_TYPES: Array<[string, string]> = [
-  ["1", "Nakit Bağış"],
-  ["2", "Çek Senet"],
-  ["3", "Kredi Kartı"],
-  ["4", "Online Bağış"],
-  ["5", "Banka Bağış"],
-  ["6", "SMS Bağış"],
-  ["7", "Ayni Bağış"],
-];
 
 export default async function RaporlarPage() {
   const user = await requireActiveUser();
@@ -50,15 +35,6 @@ export default async function RaporlarPage() {
     where: eq(portalSessions.userId, user.id),
   });
   const portalOk = portal?.state === "authenticated";
-
-  const filterRow = await db.query.appSettings.findFirst({
-    where: eq(appSettings.key, "bagis.filters"),
-  });
-  const filters = (filterRow?.value as CachedFilters | undefined) ?? {
-    activities: [],
-    pools: [],
-    types: DEFAULT_TYPES,
-  };
 
   // Son güncellemeler: herkes yalnız kendi alanının loglarını görür
   const lastRuns = (
@@ -109,7 +85,6 @@ export default async function RaporlarPage() {
             defaults={{ ay: currentMonth }}
             activities={ALLOWED_ACTIVITIES}
             pools={ALLOWED_POOLS}
-            types={filters.types.length ? filters.types : DEFAULT_TYPES}
           />
         )}
         {canYardim && <YardimForm />}

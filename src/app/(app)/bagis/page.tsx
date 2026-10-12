@@ -404,10 +404,21 @@ export default async function BagisPage({
     })),
   }));
 
+  // belirtilmemiş/diğer (bölge numarası olmayan) bağışların aylık toplamı:
+  // aylık gelişim grafiğinde ayrı renkle, bölgelerin üstüne yığılır
+  const digerAylik = new Map<string, number>();
+  for (const r of allAggRows) {
+    if (r.scope !== "bolge" || r.month === null) continue;
+    if (sart && r.activity !== sart) continue;
+    if (/^\d+\./.test(r.bolgeLabel)) continue;
+    digerAylik.set(r.month, (digerAylik.get(r.month) ?? 0) + Number(r.totalAmount));
+  }
+
   const adminMonthly: MonthPoint[] = aylarAsc.map((ay) => ({
     ay,
     amount: [...bolgeAylik.values()].reduce((s, m) => s + (m.get(ay) ?? 0), 0),
     plan: planVisible ? (planAyToplam.get(ay) ?? 0) : 0,
+    diger: digerAylik.get(ay) ?? 0,
   }));
 
   return (

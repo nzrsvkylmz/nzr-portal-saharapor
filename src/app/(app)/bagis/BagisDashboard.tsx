@@ -32,8 +32,10 @@ export interface BagisDashUnit {
 
 export interface MonthPoint {
   ay: string; // '2026-03'
-  amount: number;
+  amount: number; // bölgelere eşlenen toplam
   plan: number;
+  /** birime/bölgeye eşlenmeyen (BELİRTİLMEMİŞ vb.) tutar — yalnız yönetici genel görünümü */
+  diger?: number;
 }
 
 export interface BagisBolge {
@@ -162,31 +164,74 @@ const I = {
 
 // ---- grafikler ----
 
-/** Aylık gelişim: gerçekleşen sütunları + plan işaretleri (gold kesikli çizgi). */
-function MonthlyChart({ data, planli = true }: { data: MonthPoint[]; planli?: boolean }) {
-  const max = Math.max(1, ...data.map((d) => Math.max(d.amount, planli ? d.plan : 0)));
+/**
+ * Aylık gelişim: gerçekleşen sütunları + plan işaretleri (gold kesikli çizgi).
+ * `diger` dolu aylarda sütun yığılır: altta bölgeler (yeşil), üstte
+ * belirtilmemiş (gold); üzerine gelince kırılım tooltip'te yazar.
+ */
+function MonthlyChart({
+  data,
+  planli = true,
+  onDetail,
+}: {
+  data: MonthPoint[];
+  planli?: boolean;
+  onDetail?: () => void;
+}) {
+  const digerVar = data.some((d) => (d.diger ?? 0) > 0);
+  const max = Math.max(
+    1,
+    ...data.map((d) => Math.max(d.amount + (d.diger ?? 0), planli ? d.plan : 0)),
+  );
   return (
     <div>
       <div className="flex h-40 items-end gap-1.5 sm:gap-2">
         {data.map((d) => {
-          const hA = (d.amount / max) * 100;
+          const diger = d.diger ?? 0;
+          const toplam = d.amount + diger;
+          const hT = (toplam / max) * 100;
           const hP = (d.plan / max) * 100;
           const ok = d.plan > 0 && d.amount >= d.plan;
+          const ipucu = [
+            diger > 0 ? `Bölgeler: ${trMoney(d.amount)}` : `Gerçekleşen: ${trMoney(d.amount)}`,
+            diger > 0 ? `Belirtilmemiş: ${trMoney(diger)}` : null,
+            diger > 0 ? `Toplam: ${trMoney(toplam)}` : null,
+            planli && d.plan > 0 ? `Plan: ${trMoney(d.plan)}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
           return (
-            <div key={d.ay} className="group relative flex min-w-0 flex-1 flex-col items-center justify-end gap-1 self-stretch">
+            <div
+              key={d.ay}
+              onClick={onDetail}
+              className={`group relative flex min-w-0 flex-1 flex-col items-center justify-end gap-1 self-stretch ${onDetail ? "cursor-pointer" : ""}`}
+              title={`${ayAd(d.ay)} — ${ipucu}`}
+            >
               <span className="hidden text-[10px] font-semibold text-ink/70 sm:block">
-                {d.amount > 0 ? kompakt(d.amount) : ""}
+                {toplam > 0 ? kompakt(toplam) : ""}
               </span>
               <div className="relative flex w-full max-w-10 flex-1 items-end">
                 <div
-                  className="w-full rounded-t-md"
-                  style={{
-                    height: `${Math.max(d.amount > 0 ? 4 : 0, hA)}%`,
-                    background: ok
-                      ? "linear-gradient(180deg,#2f9e77,#00764b)"
-                      : "linear-gradient(180deg,#8fcbb2,#4d9e7e)",
-                  }}
-                />
+                  className="flex w-full flex-col justify-end overflow-hidden rounded-t-md"
+                  style={{ height: `${Math.max(toplam > 0 ? 4 : 0, hT)}%` }}
+                >
+                  {diger > 0 && (
+                    <div
+                      style={{
+                        height: `${(diger / toplam) * 100}%`,
+                        background: "linear-gradient(180deg,#d4b98a,#b99961)",
+                      }}
+                    />
+                  )}
+                  <div
+                    className="flex-1"
+                    style={{
+                      background: ok
+                        ? "linear-gradient(180deg,#2f9e77,#00764b)"
+                        : "linear-gradient(180deg,#8fcbb2,#4d9e7e)",
+                    }}
+                  />
+                </div>
                 {planli && d.plan > 0 && (
                   <div
                     className="absolute left-0 right-0"
@@ -194,7 +239,6 @@ function MonthlyChart({ data, planli = true }: { data: MonthPoint[]; planli?: bo
                       bottom: `${hP}%`,
                       borderTop: "2px dashed #b99961",
                     }}
-                    title={`Plan: ${trMoney(d.plan)}`}
                   />
                 )}
               </div>
@@ -203,16 +247,144 @@ function MonthlyChart({ data, planli = true }: { data: MonthPoint[]; planli?: bo
           );
         })}
       </div>
-      <p className="mt-2 flex items-center gap-3 text-[11px] text-ink/50">
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-ink/50">
         <span className="flex items-center gap-1">
-          <span className="h-2 w-3 rounded-sm" style={{ background: "#00764b" }} /> Gerçekleşen
+          <span className="h-2 w-3 rounded-sm" style={{ background: "#00764b" }} />
+          {digerVar ? "Bölgeler" : "Gerçekleşen"}
         </span>
+        {digerVar && (
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-3 rounded-sm" style={{ background: "#b99961" }} />
+            Belirtilmemiş
+          </span>
+        )}
         {planli && (
           <span className="flex items-center gap-1">
             <span className="w-3 border-t-2 border-dashed" style={{ borderColor: "#b99961" }} /> Plan
           </span>
         )}
+        {onDetail && (
+          <button
+            onClick={onDetail}
+            className="ml-auto font-semibold text-primary hover:underline"
+          >
+            Aylık detay →
+          </button>
+        )}
       </p>
+    </div>
+  );
+}
+
+const AY_TAM = [
+  "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+  "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+];
+const ayTamAd = (ym: string) => {
+  const m = Number(ym.slice(5, 7));
+  return `${AY_TAM[m - 1] ?? ym} ${ym.slice(0, 4)}`;
+};
+
+/** Aylık gelişim detay modalı: her ayın tam kırılımı (mobil dostu liste). */
+function MonthlyDetailModal({
+  data,
+  planli,
+  onClose,
+}: {
+  data: MonthPoint[];
+  planli: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+  const aylar = [...data]
+    .filter((m) => m.amount > 0 || (m.diger ?? 0) > 0 || m.plan > 0)
+    .reverse(); // son ay en üstte
+  const digerVar = aylar.some((m) => (m.diger ?? 0) > 0);
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-stretch justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="h-[100dvh] w-full max-w-lg overflow-y-auto bg-white shadow-xl sm:h-auto sm:max-h-[85vh] sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="sticky top-0 z-10 flex items-center justify-between px-5 pb-4 pt-5 text-white"
+          style={{ background: "linear-gradient(135deg,#004d32,#00764b)" }}
+        >
+          <h3 className="flex items-center gap-2 font-heading text-lg font-bold">
+            {I.trend("white")} Aylık Gelişim Detayı
+          </h3>
+          <button
+            onClick={onClose}
+            aria-label="Kapat"
+            className="rounded-full bg-white/20 p-1.5 transition hover:bg-white/30"
+          >
+            {I.x("white")}
+          </button>
+        </div>
+        <ul className="space-y-2 p-5 pb-[calc(env(safe-area-inset-bottom)+24px)]">
+          {aylar.map((m) => {
+            const diger = m.diger ?? 0;
+            const toplam = m.amount + diger;
+            const oran = planli && m.plan > 0 ? m.amount / m.plan : null;
+            const renk = oranRenk(oran);
+            return (
+              <li key={m.ay} className="rounded-2xl bg-cream/70 px-4 py-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-heading text-sm font-semibold text-ink">
+                    {ayTamAd(m.ay)}
+                  </span>
+                  <span className="text-base font-bold text-primary-dark">
+                    {trMoney(toplam)}
+                  </span>
+                </div>
+                <div className="mt-1.5 space-y-0.5 text-xs text-ink/70">
+                  {digerVar && (
+                    <>
+                      <p className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full" style={{ background: "#00764b" }} />
+                        Bölgeler: <strong style={{ color: "#00764b" }}>{trMoney(m.amount)}</strong>
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full" style={{ background: "#b99961" }} />
+                        Belirtilmemiş:{" "}
+                        <strong style={{ color: "#b99961" }}>{trMoney(diger)}</strong>
+                      </p>
+                    </>
+                  )}
+                  {planli && (
+                    <p className="flex items-center gap-1.5">
+                      <span className="w-2 border-t-2 border-dashed" style={{ borderColor: "#b99961" }} />
+                      Plan: <strong className="text-ink/85">{m.plan > 0 ? trMoney(m.plan) : "—"}</strong>
+                      {oran !== null && (
+                        <span
+                          className="ml-auto rounded-full px-2 py-0.5 font-bold"
+                          style={{ color: renk.fg, background: renk.bg }}
+                        >
+                          {pct(oran)}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+          {aylar.length === 0 && (
+            <li className="py-8 text-center text-sm text-ink/50">Veri yok.</li>
+          )}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -682,6 +854,7 @@ export default function BagisDashboard({
   initialBolge?: string | null;
 }) {
   const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [aylikDetay, setAylikDetay] = useState(false);
   const [selBolge, setSelBolge] = useState<string | null>(
     initialBolge && admin?.bolgeler.some((b) => b.label === initialBolge)
       ? initialBolge
@@ -920,7 +1093,11 @@ export default function BagisDashboard({
           <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
             Aylık Gelişim (yıl geneli)
           </h3>
-          <MonthlyChart data={visMonthly} planli={planVisible} />
+          <MonthlyChart
+            data={visMonthly}
+            planli={planVisible}
+            onDetail={() => setAylikDetay(true)}
+          />
         </div>
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
@@ -1004,6 +1181,14 @@ export default function BagisDashboard({
           accent={accentOf(detailIdx)}
           planVisible={planVisible}
           onClose={() => setDetailKey(null)}
+        />
+      )}
+
+      {aylikDetay && (
+        <MonthlyDetailModal
+          data={visMonthly}
+          planli={planVisible}
+          onClose={() => setAylikDetay(false)}
         />
       )}
     </div>

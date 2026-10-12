@@ -7,7 +7,7 @@ import { visibleScope } from "@/lib/domain/scope";
 import { toTrDate } from "@/lib/domain/normalize";
 import { BASE_URL } from "@/lib/portal/client";
 import { DEFAULT_FLOW, portalLink } from "@/lib/portal/relief";
-import YardimTable, { type YardimUnitRow } from "./YardimTable";
+import YardimTable, { type YardimNode, type YardimUnitRow } from "./YardimTable";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,18 @@ interface StageData {
   count: number;
 }
 
-type DistrictDays = Record<string, number[]>;
+type MahalleDays = Record<string, number[]>;
+// yeni biçim: yerleşim → mahalle → günler; eski snapshot'larda yerleşim → günler
+type DistrictDays = Record<string, MahalleDays | number[]>;
+
+/** Eski (düz) ve yeni (mahalleli) districts biçimlerini tek biçime indirger. */
+function normDistricts(d: DistrictDays | undefined): Record<string, MahalleDays> {
+  const out: Record<string, MahalleDays> = {};
+  for (const [y, v] of Object.entries(d ?? {})) {
+    out[y] = Array.isArray(v) ? { Belirtilmemiş: v } : v;
+  }
+  return out;
+}
 
 interface RowData {
   label: string;
@@ -147,35 +158,58 @@ export default async function YardimPage({
 
   const esikTarihi = toTrDate(new Date(Date.now() - esik * 86400_000));
 
-  // Temsilcilik Detayı satırları + ilçe (Yerleşim) kırılımı — tüm sayılar
-  // burada hesaplanır, client bileşeni yalnız aç/kapa yapar.
+  // Temsilcilik Detayı satırları + ilçe (Yerleşim) → mahalle kırılımı — tüm
+  // sayılar burada hesaplanır, client bileşeni yalnız aç/kapa yapar.
+  const makeNode = (
+    label: string,
+    si: number[],
+    bk: number[],
+    children: YardimNode[] = [],
+  ): YardimNode => ({
+    label,
+    siCount: si.length,
+    siRange: range(si),
+    bkCount: bk.length,
+    bkRange: range(bk),
+    kritik: [...si, ...bk].filter((d) => d > esik).length,
+    children,
+  });
+  const byTotalDesc = (a: YardimNode, z: YardimNode) =>
+    z.siCount + z.bkCount - (a.siCount + a.bkCount);
+
   const detayRows: YardimUnitRow[] = birimler.map((b) => {
     const [bolge, tems] = b.label.split("|");
     const depId = b.unitId ? depIdByUnitId.get(b.unitId) : undefined;
-    const yerlesimler = new Set([
-      ...Object.keys(b.siDistricts ?? {}),
-      ...Object.keys(b.bkDistricts ?? {}),
-    ]);
+    const siD = normDistricts(b.siDistricts);
+    const bkD = normDistricts(b.bkDistricts);
+    const yerlesimler = new Set([...Object.keys(siD), ...Object.keys(bkD)]);
     let children = [...yerlesimler]
       .map((y) => {
-        const si = b.siDistricts?.[y] ?? [];
-        const bk = b.bkDistricts?.[y] ?? [];
-        return {
-          label: y,
-          siCount: si.length,
-          siRange: range(si),
-          bkCount: bk.length,
-          bkRange: range(bk),
-          kritik: [...si, ...bk].filter((d) => d > esik).length,
-        };
+        const siMah = siD[y] ?? {};
+        const bkMah = bkD[y] ?? {};
+        const mahalleler = new Set([...Object.keys(siMah), ...Object.keys(bkMah)]);
+        let mahRows = [...mahalleler]
+          .map((m) => makeNode(m, siMah[m] ?? [], bkMah[m] ?? []))
+          .sort(byTotalDesc);
+        // mahalle bilgisi hiç yoksa alt düzey gösterilmez
+        if (mahRows.length === 1 && mahRows[0].label === "Belirtilmemiş") {
+          mahRows = [];
+        }
+        return makeNode(
+          y,
+          Object.values(siMah).flat(),
+          Object.values(bkMah).flat(),
+          mahRows,
+        );
       })
-      .sort((a, z) => z.siCount + z.bkCount - (a.siCount + a.bkCount));
-    // tek yerleşim ve adı temsilcilikle aynıysa kırılım bilgi katmaz
+      .sort(byTotalDesc);
+    // Tek yerleşim ve adı temsilcilikle aynıysa (İstanbul bölgelerinde
+    // temsilcilik = ilçe) o düzey atlanır, mahalleler doğrudan altta görünür.
     if (
       children.length === 1 &&
       children[0].label.toLocaleLowerCase("tr") === (tems ?? "").toLocaleLowerCase("tr")
     ) {
-      children = [];
+      children = children[0].children;
     }
     return {
       key: b.label,
@@ -344,8 +378,8 @@ export default async function YardimPage({
           <YardimTable rows={detayRows} defaultOpen={user.role === "TEMSILCI"} />
         </div>
         <p className="mt-2 text-xs text-ink/50">
-          Temsilcilik satırına tıklayınca başvuruların ilçe (yerleşim) kırılımı
-          açılır.{" "}
+          Temsilcilik satırına tıklayınca başvuruların ilçe (yerleşim), ilçe
+          satırına tıklayınca mahalle kırılımı açılır.{" "}
           Rapordaki sayılar başvurunun <strong>şehir/yerleşimine</strong> göredir;
           portal linkleri ise başvurunun <strong>sorumlu birimi</strong> filtresiyle
           açılır. Sorumlu birimi farklı bir birimde (örn. merkezde) olan dosyalar

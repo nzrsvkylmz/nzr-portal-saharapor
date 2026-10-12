@@ -9,8 +9,14 @@ describe("SpreadsheetML parser", () => {
   it("satırları ve hücreleri çıkarır, ilk satır başlıktır", () => {
     const rows = rowsOf(xml);
     expect(rows).toHaveLength(4);
-    expect(rows[0]).toEqual(["Başvuru", "Şehir", "Yerleşim", "Aşama"]);
-    expect(rows[1]).toEqual(["07.07.2026", "Malatya", "Battalgazi", "Sosyal İnceleme"]);
+    expect(rows[0]).toEqual(["Başvuru", "Şehir", "Yerleşim", "Mahalle", "Aşama"]);
+    expect(rows[1]).toEqual([
+      "07.07.2026",
+      "Malatya",
+      "Battalgazi",
+      "Hidayet Mah.",
+      "Sosyal İnceleme",
+    ]);
   });
 
   it("XML olmayan içerikte RemoteError fırlatır (oturum düşmesi belirtisi)", () => {

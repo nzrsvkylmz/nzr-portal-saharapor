@@ -71,6 +71,7 @@ export interface PendingRecord {
   stageKey: string;
   gun: number;
   yerlesim: string; // ilçe kırılımı için ham Yerleşim etiketi (kişisel veri değil)
+  mahalle: string; // mahalle alt kırılımı; sütun yoksa/boşsa 'Belirtilmemiş'
 }
 
 /**
@@ -98,6 +99,7 @@ export async function fetchPending(
   const iSeh = h.indexOf("Şehir");
   const iYer = h.indexOf("Yerleşim");
   const iAsm = h.indexOf("Aşama");
+  const iMah = h.indexOf("Mahalle"); // opsiyonel: eski exportlarda olmayabilir
   if (iT === -1 || iSeh === -1 || iYer === -1 || iAsm === -1) {
     throw new RemoteError(`Başvuru export sütunları beklenenden farklı: ${h.join(", ")}`);
   }
@@ -116,12 +118,15 @@ export async function fetchPending(
       iSeh < r.length ? r[iSeh] : "",
       yerlesimRaw,
     );
+    const mahalleRaw =
+      iMah !== -1 && iMah < r.length ? r[iMah].replace(/\s+/g, " ").trim() : "";
     kayitlar.push({
       bolge,
       tems,
       stageKey,
       gun,
       yerlesim: yerlesimRaw || "Belirtilmemiş",
+      mahalle: mahalleRaw || "Belirtilmemiş",
     });
   }
   return { kayitlar, okunan: data.length };

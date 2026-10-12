@@ -70,13 +70,16 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       stageKey: "si",
       gun: 92,
       yerlesim: "Battalgazi",
+      mahalle: "Hidayet Mah.",
     });
+    // Mahalle hücresi boş → 'Belirtilmemiş'
     expect(kayitlar[1]).toEqual({
       bolge: "18.BÖLGE",
       tems: "Esenyurt",
       stageKey: "bk",
       gun: 6,
       yerlesim: "Esenyurt",
+      mahalle: "Belirtilmemiş",
     });
   });
 });

@@ -186,7 +186,9 @@ export const yardimAggregates = pgTable(
     stageKey: text("stage_key").notNull(), // 'si' | 'bk' — genişleyebilir
     days: jsonb("days").notNull(), // bekleyen gün listesi [120,3,45,...]
     count: integer("count").notNull(),
-    // unit satırlarında ilçe (Yerleşim) kırılımı: {"Siverek": [120,3], ...}
+    // unit satırlarında ilçe (Yerleşim) → mahalle kırılımı:
+    // {"Siverek": {"Merkez": [120,3], ...}, ...} — ilk sürümde mahalle düzeyi
+    // olmadan {"Siverek": [120,3]} yazıldı; okuma iki biçimi de destekler.
     // Kişisel veri içermez; eski snapshot'larda NULL.
     districts: jsonb("districts"),
   },

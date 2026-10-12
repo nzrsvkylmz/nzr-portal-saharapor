@@ -1,19 +1,22 @@
 "use client";
 
 /**
- * Temsilcilik Detayı tablosu: temsilcilik satırına tıklanınca o temsilciliğe
- * eşlenen başvuruların ilçe (Yerleşim) kırılımı açılır. Tüm sayılar/aralıklar
- * sunucuda hesaplanır; burada yalnız gösterim ve aç-kapa vardır.
+ * Temsilcilik Detayı tablosu: temsilcilik satırına tıklanınca ilçe (Yerleşim)
+ * kırılımı, ilçe satırına tıklanınca mahalle kırılımı açılır. İstanbul
+ * bölgelerinde olduğu gibi temsilcilik = ilçe ise mahalleler doğrudan
+ * temsilciliğin altında görünür. Tüm sayılar/aralıklar sunucuda hesaplanır;
+ * burada yalnız gösterim ve aç-kapa vardır.
  */
 import { useState } from "react";
 
-export interface YardimChildRow {
-  label: string; // yerleşim adı
+export interface YardimNode {
+  label: string; // yerleşim ya da mahalle adı
   siCount: number;
   siRange: string;
   bkCount: number;
   bkRange: string;
   kritik: number;
+  children: YardimNode[];
 }
 
 export interface YardimUnitRow {
@@ -27,7 +30,7 @@ export interface YardimUnitRow {
   kritik: number;
   portalAllUrl: string | null;
   portalKritikUrl: string | null;
-  children: YardimChildRow[];
+  children: YardimNode[];
 }
 
 function kritikBadge(n: number) {
@@ -47,9 +50,11 @@ export default function YardimTable({
   rows: YardimUnitRow[];
   defaultOpen: boolean;
 }) {
+  // path anahtarı: "unitKey" | "unitKey|yerleşim" — her düzey ayrı aç/kapa
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const isOpen = (k: string) => open[k] ?? defaultOpen;
-  const toggle = (k: string) => setOpen((s) => ({ ...s, [k]: !isOpen(k) }));
+  const isOpen = (k: string, dflt: boolean) => open[k] ?? dflt;
+  const toggle = (k: string, dflt: boolean) =>
+    setOpen((s) => ({ ...s, [k]: !isOpen(k, dflt) }));
 
   return (
     <table className="w-full text-sm">
@@ -74,15 +79,19 @@ export default function YardimTable({
         )}
         {rows.map((b, i) => {
           const expandable = b.children.length > 0;
-          const acik = expandable && isOpen(b.key);
+          const acik = expandable && isOpen(b.key, defaultOpen);
+          const stop = (e: React.MouseEvent) => e.stopPropagation();
           return (
-            <Rows
+            <FragmentRows
               key={b.key}
               b={b}
               zebra={i % 2 === 1}
               expandable={expandable}
               open={acik}
-              onToggle={() => toggle(b.key)}
+              onToggle={() => toggle(b.key, defaultOpen)}
+              isOpen={isOpen}
+              toggle={toggle}
+              stop={stop}
             />
           );
         })}
@@ -91,20 +100,25 @@ export default function YardimTable({
   );
 }
 
-function Rows({
+function FragmentRows({
   b,
   zebra,
   expandable,
   open,
   onToggle,
+  isOpen,
+  toggle,
+  stop,
 }: {
   b: YardimUnitRow;
   zebra: boolean;
   expandable: boolean;
   open: boolean;
   onToggle: () => void;
+  isOpen: (k: string, dflt: boolean) => boolean;
+  toggle: (k: string, dflt: boolean) => void;
+  stop: (e: React.MouseEvent) => void;
 }) {
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
     <>
       <tr
@@ -156,17 +170,69 @@ function Rows({
       </tr>
       {open &&
         b.children.map((c) => (
-          <tr key={c.label} className="bg-mint/10 text-ink/80">
-            <td className="px-4 py-1.5 pl-12 text-[13px]">{c.label}</td>
-            <td className="px-4 py-1.5 text-[13px]">{c.siCount || ""}</td>
-            <td className="px-4 py-1.5 text-[13px] text-ink/60">{c.siRange}</td>
-            <td className="px-4 py-1.5 text-[13px]">{c.bkCount || ""}</td>
-            <td className="px-4 py-1.5 text-[13px] text-ink/60">{c.bkRange}</td>
-            <td className="px-4 py-1.5 text-[13px]">
-              {c.kritik > 0 ? kritikBadge(c.kritik) : ""}
-            </td>
-            <td className="px-4 py-1.5" />
-          </tr>
+          <NodeRows
+            key={c.label}
+            node={c}
+            pathKey={`${b.key}|${c.label}`}
+            depth={1}
+            isOpen={isOpen}
+            toggle={toggle}
+          />
+        ))}
+    </>
+  );
+}
+
+function NodeRows({
+  node,
+  pathKey,
+  depth,
+  isOpen,
+  toggle,
+}: {
+  node: YardimNode;
+  pathKey: string;
+  depth: number;
+  isOpen: (k: string, dflt: boolean) => boolean;
+  toggle: (k: string, dflt: boolean) => void;
+}) {
+  const expandable = node.children.length > 0;
+  const open = expandable && isOpen(pathKey, false); // alt düzeyler hep kapalı başlar
+  const pad = depth === 1 ? "pl-12" : "pl-20";
+  const tone = depth === 1 ? "bg-mint/10 text-ink/80" : "bg-mint/5 text-ink/60";
+  return (
+    <>
+      <tr
+        className={`${tone} ${expandable ? "cursor-pointer hover:bg-mint/30" : ""}`}
+        onClick={expandable ? () => toggle(pathKey, false) : undefined}
+      >
+        <td className={`px-4 py-1.5 ${pad} text-[13px]`}>
+          <span className="flex items-center gap-1.5">
+            {expandable && (
+              <span className="text-xs text-primary">{open ? "▾" : "▸"}</span>
+            )}
+            {node.label}
+          </span>
+        </td>
+        <td className="px-4 py-1.5 text-[13px]">{node.siCount || ""}</td>
+        <td className="px-4 py-1.5 text-[13px] text-ink/60">{node.siRange}</td>
+        <td className="px-4 py-1.5 text-[13px]">{node.bkCount || ""}</td>
+        <td className="px-4 py-1.5 text-[13px] text-ink/60">{node.bkRange}</td>
+        <td className="px-4 py-1.5 text-[13px]">
+          {node.kritik > 0 ? kritikBadge(node.kritik) : ""}
+        </td>
+        <td className="px-4 py-1.5" />
+      </tr>
+      {open &&
+        node.children.map((c) => (
+          <NodeRows
+            key={c.label}
+            node={c}
+            pathKey={`${pathKey}|${c.label}`}
+            depth={depth + 1}
+            isOpen={isOpen}
+            toggle={toggle}
+          />
         ))}
     </>
   );

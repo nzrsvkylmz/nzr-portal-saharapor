@@ -59,7 +59,7 @@ export default async function AppLayout({
                 height={30}
                 className="rounded-xl bg-white p-0.5 shadow-sm"
               />
-              NEZİR <span className="font-normal text-white/70">Saha Rapor</span>
+              NEZİR <span className="font-normal text-white/70">Rapor</span>
             </Link>
             {active && <HeaderNav links={headerLinks} />}
           </div>

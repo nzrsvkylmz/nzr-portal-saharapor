@@ -93,9 +93,9 @@ export default function LoginPage() {
             <img src="/logo.png" alt="NEZİR" width={56} height={48} />
           </span>
           <div className="font-heading text-3xl font-bold tracking-wide text-white">
-            NEZİR
+            Nezir Rapor
           </div>
-          <p className="mt-1 text-sm text-white/75">Saha Rapor Portalı</p>
+          <p className="mt-1 text-sm text-white/75">Bağış ve yardım raporları</p>
         </div>
 
         <div className="rounded-3xl bg-white/95 p-8 shadow-2xl backdrop-blur">

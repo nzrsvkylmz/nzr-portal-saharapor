@@ -13,7 +13,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "NEZİR Saha Rapor Portalı",
+  title: "Nezir Rapor",
   description: "Bağış ve yardım raporları — bölge ve temsilcilik görünümü",
 };
 

@@ -816,7 +816,8 @@ function UnitModal({
                           />
                         </div>
                         <span className="shrink-0 text-[11px] text-ink/55">
-                          %{(pay * 100).toFixed(1).replace(".", ",")} · {c.count} adet
+                          il içi pay %{(pay * 100).toFixed(1).replace(".", ",")} ·{" "}
+                          {c.count} adet
                           {cOran !== null ? ` · hedef ${pct(cOran)}` : ""}
                         </span>
                       </div>

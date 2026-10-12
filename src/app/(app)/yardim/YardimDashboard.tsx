@@ -416,11 +416,12 @@ function UnitModal({
   const toplam = u.siCount + u.bkCount;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+      className="fixed inset-0 z-[60] flex items-stretch justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-6"
       onClick={onClose}
     >
+      {/* mobil: tam ekran (100dvh — tarayıcı çubuğu hesaba katılır); masaüstü: ortalanmış panel */}
       <div
-        className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-xl sm:rounded-3xl"
+        className="h-[100dvh] w-full max-w-lg overflow-y-auto bg-white shadow-xl sm:h-auto sm:max-h-[85vh] sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 px-5 pb-4 pt-5 text-white" style={{ background: accent.grad }}>
@@ -458,7 +459,7 @@ function UnitModal({
           </div>
         </div>
 
-        <div className="space-y-5 p-5">
+        <div className="space-y-5 p-5 pb-[calc(env(safe-area-inset-bottom)+24px)]">
           {u.kritik > 0 && (
             <p className="flex items-center gap-2 rounded-xl border border-amber/40 bg-amber/10 px-3 py-2 text-sm text-ink/80">
               <span className="text-amber">{I.alert()}</span>

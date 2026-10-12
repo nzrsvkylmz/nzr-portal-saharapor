@@ -354,6 +354,13 @@ export default async function YardimPage({
             </tbody>
           </table>
         </div>
+        <p className="mt-2 text-xs text-ink/50">
+          Rapordaki sayılar başvurunun <strong>şehir/yerleşimine</strong> göredir;
+          portal linkleri ise başvurunun <strong>sorumlu birimi</strong> filtresiyle
+          açılır. Sorumlu birimi farklı bir birimde (örn. merkezde) olan dosyalar
+          linkte görünmez — bu yüzden portal, buradaki sayıdan az kayıt
+          gösterebilir.
+        </p>
       </section>
 
       {unmatchedRows.length > 0 && (

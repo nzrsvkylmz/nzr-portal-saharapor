@@ -69,8 +69,9 @@ export default async function PlanlarPage({
           Aylık Genel Bağış Planları
         </h1>
         <p className="mt-1 text-sm text-ink/60">
-          Bölge ve il temsilciliği bazlı aylık hedefler; bağış raporundaki
-          gerçekleşme oranları bu değerlere göre hesaplanır.
+          İl temsilciliği bazlı aylık hedefler; bağış raporundaki gerçekleşme
+          oranları bu değerlere göre hesaplanır. Bölge hedefi, il planlarının
+          toplamından otomatik hesaplanır — ayrıca girilmez.
         </p>
       </div>
 
@@ -98,18 +99,12 @@ export default async function PlanlarPage({
             <section key={b.label} className="rounded-2xl bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-mint/60 pb-3">
                 <h2 className="font-heading font-semibold text-primary-dark">{b.label}</h2>
-                <label className="flex items-center gap-2 text-sm">
-                  <span className="text-ink/60">Bölge hedefi</span>
-                  <span className="text-ink/50">₺</span>
-                  <input
-                    name={`plan:${b.label}`}
-                    defaultValue={
-                      planByBolge.has(b.label) ? fmtTutar(planByBolge.get(b.label)!) : ""
-                    }
-                    inputMode="decimal"
-                    className="w-32 rounded-lg border border-mint px-2 py-1 text-right font-semibold"
-                  />
-                </label>
+                <span className="flex items-center gap-2 text-sm">
+                  <span className="text-ink/60">Bölge hedefi (il toplamı)</span>
+                  <span className="rounded-lg bg-mint/40 px-3 py-1 text-right font-semibold text-primary-dark">
+                    ₺{fmtTutar(planByBolge.get(b.label) ?? 0)}
+                  </span>
+                </span>
               </div>
               {b.units.length > 0 && (
                 <div className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">

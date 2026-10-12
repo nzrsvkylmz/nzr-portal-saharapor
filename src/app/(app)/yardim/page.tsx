@@ -71,7 +71,7 @@ export default async function YardimPage({
   if (!canViewYardim(user)) redirect("/bagis"); // muhasebe yardımı görmez
   const scope = await visibleScope(user, "yardim");
   const sp = await searchParams;
-  const esik = Math.min(365, Math.max(1, Number(sp.esik) || 90));
+  const esik = Math.min(365, Math.max(1, Number(sp.esik) || 60));
 
   const run = await db.query.reportRuns.findFirst({
     where: and(eq(reportRuns.kind, "yardim"), eq(reportRuns.status, "done")),

@@ -33,7 +33,7 @@ export async function GET(
     return NextResponse.json({ error: "Yardım raporuna erişiminiz yok." }, { status: 403 });
   }
   const scope = await visibleScope(user, kind === "bagis" ? "bagis" : "yardim");
-  const esik = Math.min(365, Math.max(1, Number(req.nextUrl.searchParams.get("esik")) || 90));
+  const esik = Math.min(365, Math.max(1, Number(req.nextUrl.searchParams.get("esik")) || 60));
 
   if (kind === "bagis") {
     const run = await db.query.reportRuns.findFirst({

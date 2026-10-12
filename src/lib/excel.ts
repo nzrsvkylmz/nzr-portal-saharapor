@@ -5,7 +5,6 @@
 import ExcelJS from "exceljs";
 
 const GREEN = "FF00764B"; // Nezir Yeşili
-const STRIPE = "FFF5F0E8"; // Krem
 const AMBER = "FFB95C00"; // kritik metin (kehribar koyusu — okunabilirlik)
 
 function styleHeader(row: ExcelJS.Row) {
@@ -15,16 +14,6 @@ function styleHeader(row: ExcelJS.Row) {
     cell.alignment = { horizontal: "center", vertical: "middle" };
   });
   row.height = 20;
-}
-
-function stripe(ws: ExcelJS.Worksheet, startRow: number) {
-  for (let i = startRow; i <= ws.rowCount; i++) {
-    if ((i - startRow) % 2 === 1) {
-      ws.getRow(i).eachCell((cell) => {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: STRIPE } };
-      });
-    }
-  }
 }
 
 export interface BagisExcelRow {
@@ -118,12 +107,11 @@ export async function buildYardimXlsx(
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Yardım Raporu");
   ws.addRow([title]);
-  ws.mergeCells(1, 1, 1, 8);
+  ws.mergeCells(1, 1, 1, 7);
   ws.getCell(1, 1).font = { bold: true, size: 13, color: { argb: GREEN } };
 
   styleHeader(
     ws.addRow([
-      "Sıra",
       "Bölge",
       "Birim",
       "Sosyal İnceleme",
@@ -134,27 +122,36 @@ export async function buildYardimXlsx(
     ]),
   );
 
-  rows.forEach((r, i) => {
+  for (const r of rows) {
+    const bolgeSatiri = r.birim === null;
     const row = ws.addRow([
-      i + 1,
       r.bolge,
-      r.birim ?? "—",
+      bolgeSatiri ? "BÖLGE TOPLAMI" : r.birim,
       r.siAdet,
       r.siAralik,
       r.bkAdet,
       r.bkAralik,
       r.kritik,
     ]);
-    if (r.kritik > 0) {
-      row.getCell(8).font = { bold: true, color: { argb: AMBER } };
+    if (bolgeSatiri) {
+      // bölge özet satırı: mint zemin + koyu yeşil kalın yazı
+      row.eachCell((cell) => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: MINT } };
+        cell.font = { bold: true, color: { argb: "FF004D32" } };
+      });
     }
-  });
-  stripe(ws, 3);
+    if (r.kritik > 0) {
+      row.getCell(7).font = {
+        bold: true,
+        color: { argb: AMBER },
+      };
+    }
+  }
 
-  ws.getColumn(1).width = 6;
-  ws.getColumn(2).width = 14;
-  ws.getColumn(3).width = 28;
-  [4, 5, 6, 7, 8].forEach((c) => (ws.getColumn(c).width = 16));
+  ws.getColumn(1).width = 14;
+  ws.getColumn(2).width = 30;
+  [3, 4, 5, 6, 7].forEach((c) => (ws.getColumn(c).width = 16));
+  ws.views = [{ state: "frozen", ySplit: 2 }];
 
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

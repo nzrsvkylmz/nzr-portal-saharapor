@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * Saha (bölge müdürü / temsilci) yardım dashboard'u: KPI kartları, SVG
- * grafikler (aşama donut'u, bekleme süresi dağılımı, temsilcilik sıralaması),
- * temsilcilik kartları ve modal detay (ilçe → mahalle kırılımı + en uzun
- * bekleyenler). Tüm sayılar sunucuda hesaplanır; burada yalnız gösterim var.
- * Mobil öncelikli: kartlar tek kolondan başlar, modal altan açılır.
+ * Yardım dashboard'u — saha (bölge müdürü / temsilci) ve yönetici modu.
+ * Saha: KPI kartları, grafikler, temsilcilik kartları, modal detay.
+ * Yönetici (bolgeler prop'u verilince): önce bölge kartları/grafikleri,
+ * bölgeye tıklayınca o bölgenin temsilcilik kartlarına inilir (drill-down),
+ * temsilcilik kartından modala (ilçe → mahalle + en uzun bekleyenler).
+ * Tüm sayılar sunucuda hesaplanır; burada yalnız gösterim/gezinme var.
  */
 import { useEffect, useState } from "react";
 import type { YardimNode, YardimUnitRow } from "./YardimTable";
@@ -14,6 +15,15 @@ export interface WaitBin {
   label: string; // '0–30'
   si: number;
   bk: number;
+}
+
+export interface YardimBolge {
+  label: string; // '1.BÖLGE'
+  si: number;
+  bk: number;
+  kritik: number;
+  siRange: string;
+  bkRange: string;
 }
 
 // Tema-sadık vurgu paleti (kehribar yalnız kritik rozetlerde kullanılır)
@@ -32,6 +42,14 @@ const I = {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1 1 16 0Z" />
       <circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
+  grid: (c = "currentColor") => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="7" height="7" x="3" y="3" rx="1.5" />
+      <rect width="7" height="7" x="14" y="3" rx="1.5" />
+      <rect width="7" height="7" x="14" y="14" rx="1.5" />
+      <rect width="7" height="7" x="3" y="14" rx="1.5" />
     </svg>
   ),
   clock: (c = "currentColor") => (
@@ -65,6 +83,12 @@ const I = {
       <path d="M15 3h6v6" />
       <path d="M10 14 21 3" />
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </svg>
+  ),
+  back: (c = "currentColor") => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 19-7-7 7-7" />
+      <path d="M19 12H5" />
     </svg>
   ),
   x: (c = "currentColor") => (
@@ -184,18 +208,26 @@ function WaitChart({ bins, esik }: { bins: WaitBin[]; esik: number }) {
   );
 }
 
-/** Temsilcilik bazlı bekleyen — yatay sıralı bar grafiği. */
-function UnitBars({ units }: { units: YardimUnitRow[] }) {
-  const sorted = [...units]
-    .map((u) => ({ tems: u.tems, toplam: u.siCount + u.bkCount, kritik: u.kritik }))
-    .sort((a, b) => b.toplam - a.toplam)
-    .slice(0, 8);
+/** Sıralama bar grafiği (bölge ya da temsilcilik bazlı). */
+function RankBars({
+  rows,
+  onPick,
+}: {
+  rows: { label: string; toplam: number; kritik: number }[];
+  onPick?: (label: string) => void;
+}) {
+  const sorted = [...rows].sort((a, b) => b.toplam - a.toplam).slice(0, 10);
   const max = Math.max(1, ...sorted.map((u) => u.toplam));
   return (
     <div className="space-y-2.5">
       {sorted.map((u, i) => (
-        <div key={u.tems} className="flex items-center gap-2 text-sm">
-          <span className="w-24 shrink-0 truncate text-xs text-ink/70 sm:w-28">{u.tems}</span>
+        <div key={u.label} className="flex items-center gap-2 text-sm">
+          <button
+            onClick={onPick ? () => onPick(u.label) : undefined}
+            className={`w-24 shrink-0 truncate text-left text-xs sm:w-28 ${onPick ? "text-primary hover:underline" : "text-ink/70"}`}
+          >
+            {u.label}
+          </button>
           <div className="h-5 flex-1 overflow-hidden rounded-full bg-cream">
             <div
               className="flex h-full items-center rounded-full pl-2"
@@ -259,6 +291,59 @@ function KpiCard({
       </p>
       <p className="mt-0.5 text-[11px] text-ink/50">{sub}</p>
     </div>
+  );
+}
+
+function BolgeCard({ b, i, onOpen }: { b: YardimBolge; i: number; onOpen: () => void }) {
+  const a = accentOf(i);
+  const toplam = b.si + b.bk;
+  const siPct = toplam ? Math.round((b.si / toplam) * 100) : 0;
+  return (
+    <button
+      onClick={onOpen}
+      className="flex flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm transition hover:shadow-md"
+      style={{ borderTop: `4px solid ${a.main}` }}
+    >
+      <div className="flex-1 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: a.soft, color: a.main }}
+            >
+              {I.grid()}
+            </span>
+            <span className="font-heading text-[15px] font-semibold text-ink">{b.label}</span>
+          </span>
+          {b.kritik > 0 && (
+            <span className="shrink-0 rounded-full bg-amber/20 px-2 py-0.5 text-xs font-bold text-amber">
+              {b.kritik} kritik
+            </span>
+          )}
+        </div>
+        <p className="mt-3">
+          <span className="text-3xl font-bold" style={{ color: a.main }}>
+            {toplam}
+          </span>{" "}
+          <span className="text-sm text-ink/60">bekleyen</span>
+        </p>
+        <div className="mt-3 flex gap-4 text-xs text-ink/70">
+          <span>
+            Sosyal İnc. <strong className="text-ink">{b.si}</strong>
+          </span>
+          <span>
+            Koordinatör <strong className="text-ink">{b.bk}</strong>
+          </span>
+        </div>
+        <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-cream">
+          <div className="h-full" style={{ width: `${siPct}%`, background: a.grad }} />
+          <div className="h-full flex-1" style={{ background: "#e7dfcf" }} />
+        </div>
+      </div>
+      <div className="border-t border-cream px-4 py-2.5 text-xs font-semibold sm:px-5" style={{ color: a.main }}>
+        Temsilcilikleri gör →
+      </div>
+    </button>
   );
 }
 
@@ -549,6 +634,8 @@ export default function YardimDashboard({
   units,
   bins,
   exportUrl,
+  bolgeler,
+  binsByBolge,
 }: {
   headerLabel: string;
   updatedAt: string;
@@ -557,12 +644,23 @@ export default function YardimDashboard({
   units: YardimUnitRow[];
   bins: WaitBin[];
   exportUrl: string;
+  /** Yönetici modu: bölge özetleri (drill-down ile temsilciliklere inilir). */
+  bolgeler?: YardimBolge[];
+  binsByBolge?: Record<string, WaitBin[]>;
 }) {
-  const [detail, setDetail] = useState<number | null>(null);
-  const si = units.reduce((s, u) => s + u.siCount, 0);
-  const bk = units.reduce((s, u) => s + u.bkCount, 0);
-  const kritik = units.reduce((s, u) => s + u.kritik, 0);
-  const cokBirim = units.length > 1;
+  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [selBolge, setSelBolge] = useState<string | null>(null);
+  const admin = !!bolgeler;
+
+  const visUnits = admin && selBolge ? units.filter((u) => u.bolge === selBolge) : units;
+  const si = visUnits.reduce((s, u) => s + u.siCount, 0);
+  const bk = visUnits.reduce((s, u) => s + u.bkCount, 0);
+  const kritik = visUnits.reduce((s, u) => s + u.kritik, 0);
+  const visBins = admin && selBolge ? (binsByBolge?.[selBolge] ?? bins) : bins;
+
+  const detailIdx = detailKey ? visUnits.findIndex((u) => u.key === detailKey) : -1;
+  const kartGorunumu = !admin || selBolge !== null;
+  const cokBirim = visUnits.length > 1;
 
   return (
     <div className="space-y-6">
@@ -570,7 +668,7 @@ export default function YardimDashboard({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-primary">
-            {headerLabel}
+            {admin && selBolge ? `${selBolge} · Bölge Detayı` : headerLabel}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-primary-dark sm:text-3xl">
             Yardım Başvuruları
@@ -606,13 +704,23 @@ export default function YardimDashboard({
         </div>
       </div>
 
+      {/* bölge seçiliyken geri dönüş */}
+      {admin && selBolge && (
+        <button
+          onClick={() => setSelBolge(null)}
+          className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-medium text-primary shadow-sm transition hover:bg-mint/30"
+        >
+          {I.back()} Tüm bölgelere dön
+        </button>
+      )}
+
       {/* KPI kartları */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           icon={I.users()}
           label="Toplam Bekleyen"
           value={si + bk}
-          sub="sorumluluk alanınızda"
+          sub={admin ? (selBolge ?? "tüm bölgeler") : "sorumluluk alanınızda"}
           tone="green"
         />
         <KpiCard
@@ -638,14 +746,14 @@ export default function YardimDashboard({
         />
       </div>
 
-      {units.length === 0 ? (
+      {visUnits.length === 0 ? (
         <div className="rounded-2xl bg-white p-10 text-center text-ink/60 shadow-sm">
           Bu kapsamda bekleyen başvuru yok. 🎉
         </div>
       ) : (
         <>
           {/* grafikler */}
-          <div className={`grid gap-4 ${cokBirim ? "lg:grid-cols-3" : "sm:grid-cols-2"}`}>
+          <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-2xl bg-white p-5 shadow-sm">
               <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
                 Aşama Dağılımı
@@ -656,41 +764,80 @@ export default function YardimDashboard({
               <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
                 Bekleme Süresi Dağılımı
               </h3>
-              <WaitChart bins={bins} esik={esik} />
+              <WaitChart bins={visBins} esik={esik} />
             </div>
-            {cokBirim && (
+            {admin && !selBolge ? (
               <div className="rounded-2xl bg-white p-5 shadow-sm">
                 <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
-                  Temsilcilik Sıralaması
+                  Bölge Sıralaması
                 </h3>
-                <UnitBars units={units} />
+                <RankBars
+                  rows={bolgeler!.map((b) => ({
+                    label: b.label,
+                    toplam: b.si + b.bk,
+                    kritik: b.kritik,
+                  }))}
+                  onPick={(l) => setSelBolge(l)}
+                />
               </div>
+            ) : (
+              cokBirim && (
+                <div className="rounded-2xl bg-white p-5 shadow-sm">
+                  <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
+                    Temsilcilik Sıralaması
+                  </h3>
+                  <RankBars
+                    rows={visUnits.map((u) => ({
+                      label: u.tems,
+                      toplam: u.siCount + u.bkCount,
+                      kritik: u.kritik,
+                    }))}
+                  />
+                </div>
+              )
             )}
           </div>
 
+          {/* bölge kartları (yönetici, seçim yokken) */}
+          {admin && !selBolge && (
+            <section>
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="font-heading text-lg font-semibold text-ink">Bölge Özetleri</h2>
+                <p className="text-xs text-ink/50">bölgeye dokununca temsilcilikler açılır</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 lg:grid-cols-3">
+                {bolgeler!.map((b, i) => (
+                  <BolgeCard key={b.label} b={b} i={i} onOpen={() => setSelBolge(b.label)} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* temsilcilik kartları */}
-          <section>
-            <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="font-heading text-lg font-semibold text-ink">
-                Temsilcilik Özetleri
-              </h2>
-              <p className="text-xs text-ink/50">karta dokununca detay açılır</p>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
-              {units.map((u, i) => (
-                <UnitCard key={u.key} u={u} i={i} onDetail={() => setDetail(i)} />
-              ))}
-            </div>
-          </section>
+          {kartGorunumu && (
+            <section>
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="font-heading text-lg font-semibold text-ink">
+                  Temsilcilik Özetleri
+                </h2>
+                <p className="text-xs text-ink/50">karta dokununca detay açılır</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+                {visUnits.map((u, i) => (
+                  <UnitCard key={u.key} u={u} i={i} onDetail={() => setDetailKey(u.key)} />
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
 
-      {detail !== null && units[detail] && (
+      {detailIdx !== -1 && (
         <UnitModal
-          u={units[detail]}
-          accent={accentOf(detail)}
+          u={visUnits[detailIdx]}
+          accent={accentOf(detailIdx)}
           esik={esik}
-          onClose={() => setDetail(null)}
+          onClose={() => setDetailKey(null)}
         />
       )}
     </div>

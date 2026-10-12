@@ -7,8 +7,8 @@ import { visibleScope } from "@/lib/domain/scope";
 import { toTrDate } from "@/lib/domain/normalize";
 import { BASE_URL } from "@/lib/portal/client";
 import { DEFAULT_FLOW, portalLink } from "@/lib/portal/relief";
-import YardimTable, { type YardimNode, type YardimUnitRow } from "./YardimTable";
-import YardimDashboard, { type WaitBin } from "./YardimDashboard";
+import type { YardimNode, YardimUnitRow } from "./YardimTable";
+import YardimDashboard, { type WaitBin, type YardimBolge } from "./YardimDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -130,7 +130,7 @@ export default async function YardimPage({
   );
   const unitRows = aggRows.filter((r) => {
     if (r.scope !== "unit") return false;
-    if (scope.all) return !sp.bolge || r.bolgeLabel === sp.bolge;
+    if (scope.all) return true; // yönetici: bölge seçimi dashboard'da yapılır
     return (
       (r.unitId !== null && scope.unitIds.includes(r.unitId)) ||
       scope.unitLabels.includes(r.unitLabel ?? "")
@@ -146,16 +146,6 @@ export default async function YardimPage({
   const birimler = [
     ...collect(unitRows, (r) => `${r.bolgeLabel}|${r.unitLabel}`).values(),
   ].sort((a, b) => a.label.localeCompare(b.label, "tr"));
-
-  const toplamSi = bolgeRows
-    .filter((r) => r.stageKey === "si")
-    .reduce((s, r) => s + r.count, 0);
-  const toplamBk = bolgeRows
-    .filter((r) => r.stageKey === "bk")
-    .reduce((s, r) => s + r.count, 0);
-  const toplamKritik =
-    [...bolgeler.values()].reduce((s, b) => s + kritikAdet(b, esik), 0) ||
-    birimler.reduce((s, b) => s + kritikAdet(b, esik), 0);
 
   const esikTarihi = toTrDate(new Date(Date.now() - esik * 86400_000));
 
@@ -242,39 +232,38 @@ export default async function YardimPage({
       children,
     };
   });
-  const seciliBolgeler = scope.all
-    ? [...new Set(aggRows.filter((r) => r.scope === "unit").map((r) => r.bolgeLabel))]
-        .filter(Boolean)
-        .sort(
-          (a, b) =>
-            (Number(/^(\d+)/.exec(a!)?.[1]) || 999) -
-            (Number(/^(\d+)/.exec(b!)?.[1]) || 999),
-        )
-    : [];
-
-  // Saha rolleri (bölge müdürü / temsilci): kart + grafik dashboard'u.
-  if (!scope.all) {
-    const b1 = Math.max(1, Math.round(esik / 3));
-    const b2 = Math.max(b1 + 1, Math.round((2 * esik) / 3));
-    const binDefs = [
-      { label: `0–${b1}`, min: 0, max: b1 },
-      { label: `${b1 + 1}–${b2}`, min: b1 + 1, max: b2 },
-      { label: `${b2 + 1}–${esik}`, min: b2 + 1, max: esik },
-      { label: `${esik}+`, min: esik + 1, max: Infinity },
-    ];
-    const bins: WaitBin[] = binDefs.map((d) => ({ label: d.label, si: 0, bk: 0 }));
-    for (const b of birimler) {
-      for (const [stage, days] of [
-        ["si", b.si?.days ?? []],
-        ["bk", b.bk?.days ?? []],
-      ] as const) {
-        for (const gun of days) {
-          if (gun < 0) continue;
-          const i = binDefs.findIndex((d) => gun >= d.min && gun <= d.max);
-          if (i !== -1) bins[i][stage] += 1;
+  // Bekleme süresi dağılımı dilimleri (kritik eşiğe göre): genel + bölge bazlı
+  const b1 = Math.max(1, Math.round(esik / 3));
+  const b2 = Math.max(b1 + 1, Math.round((2 * esik) / 3));
+  const binDefs = [
+    { label: `0–${b1}`, min: 0, max: b1 },
+    { label: `${b1 + 1}–${b2}`, min: b1 + 1, max: b2 },
+    { label: `${b2 + 1}–${esik}`, min: b2 + 1, max: esik },
+    { label: `${esik}+`, min: esik + 1, max: Infinity },
+  ];
+  const yeniBins = (): WaitBin[] => binDefs.map((d) => ({ label: d.label, si: 0, bk: 0 }));
+  const bins = yeniBins();
+  const binsByBolge: Record<string, WaitBin[]> = {};
+  for (const b of birimler) {
+    const bolgeKey = b.label.split("|")[0] ?? "?";
+    const bolgeBins = scope.all ? (binsByBolge[bolgeKey] ??= yeniBins()) : null;
+    for (const [stage, days] of [
+      ["si", b.si?.days ?? []],
+      ["bk", b.bk?.days ?? []],
+    ] as const) {
+      for (const gun of days) {
+        if (gun < 0) continue;
+        const i = binDefs.findIndex((d) => gun >= d.min && gun <= d.max);
+        if (i !== -1) {
+          bins[i][stage] += 1;
+          if (bolgeBins) bolgeBins[i][stage] += 1;
         }
       }
     }
+  }
+
+  // Saha rolleri (bölge müdürü / temsilci): kart + grafik dashboard'u.
+  if (!scope.all) {
     const headerLabel =
       user.role === "BOLGE_MUDURU"
         ? `${scope.bolgeLabels[0] ?? ""} · Saha Görünümü`
@@ -294,156 +283,29 @@ export default async function YardimPage({
     );
   }
 
+  // Yönetici dashboard'u: bölge kartları → temsilcilik drill-down → modal.
+  const adminBolgeler: YardimBolge[] = bolgeler.map((b) => ({
+    label: b.label,
+    si: b.si?.count ?? 0,
+    bk: b.bk?.count ?? 0,
+    kritik: kritikAdet(b, esik),
+    siRange: range(b.si?.days ?? []),
+    bkRange: range(b.bk?.days ?? []),
+  }));
+
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-primary-dark">Yardım Raporu</h1>
-          <p className="mt-1 text-sm text-ink/60">
-            {fmtTime(run.finishedAt)} itibarıyla bekleyen başvurular ·{" "}
-            {run.rowCount ?? 0} kayıt tarandı
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <form className="flex items-center gap-2 text-sm" method="GET">
-            {sp.bolge && <input type="hidden" name="bolge" value={sp.bolge} />}
-            <label htmlFor="esik">Kritik eşik</label>
-            <input
-              id="esik"
-              name="esik"
-              type="number"
-              min={1}
-              max={365}
-              defaultValue={esik}
-              className="w-20 rounded-lg border border-mint px-2 py-1"
-            />
-            <button className="rounded-lg bg-primary px-3 py-1.5 text-white">Uygula</button>
-          </form>
-          <a
-            href={`/api/export/yardim?esik=${esik}`}
-            className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary transition hover:bg-primary hover:text-white"
-          >
-            ⬇ Excel
-          </a>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <p className="text-xs text-ink/60">Sosyal İnceleme Bekleyen</p>
-          <p className="mt-1 text-3xl font-semibold text-primary-dark">
-            {scope.all
-              ? toplamSi
-              : birimler.reduce((s, b) => s + (b.si?.count ?? 0), 0)}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <p className="text-xs text-ink/60">Bölge Koordinatörü Kararında</p>
-          <p className="mt-1 text-3xl font-semibold text-primary-dark">
-            {scope.all
-              ? toplamBk
-              : birimler.reduce((s, b) => s + (b.bk?.count ?? 0), 0)}
-          </p>
-        </div>
-        <div className="rounded-2xl border-2 border-amber/60 bg-white p-5 shadow-sm">
-          <p className="text-xs text-ink/60">Kritik (&gt;{esik} gün)</p>
-          <p className="mt-1 text-3xl font-semibold text-amber">
-            {scope.all
-              ? toplamKritik
-              : birimler.reduce((s, b) => s + kritikAdet(b, esik), 0)}
-          </p>
-        </div>
-      </div>
-
-      {scope.all && (
-        <section>
-          <h2 className="font-heading text-lg font-semibold">Bölge Özeti</h2>
-          <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-sm">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-primary text-left text-white">
-                  <th className="px-4 py-2.5 font-medium">Bölge</th>
-                  <th className="px-4 py-2.5 font-medium">Sosyal İnceleme</th>
-                  <th className="px-4 py-2.5 font-medium">Gün Aralığı</th>
-                  <th className="px-4 py-2.5 font-medium">Koordinatör Kararı</th>
-                  <th className="px-4 py-2.5 font-medium">Gün Aralığı</th>
-                  <th className="px-4 py-2.5 font-medium">Kritik</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bolgeler.map((b, i) => {
-                  const kritik = kritikAdet(b, esik);
-                  return (
-                    <tr key={b.label} className={i % 2 ? "bg-cream/60" : ""}>
-                      <td className="px-4 py-2">
-                        <a
-                          href={`/yardim?bolge=${encodeURIComponent(b.label)}&esik=${esik}`}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {b.label}
-                        </a>
-                      </td>
-                      <td className="px-4 py-2">{b.si?.count ?? 0}</td>
-                      <td className="px-4 py-2 text-ink/70">{range(b.si?.days ?? [])}</td>
-                      <td className="px-4 py-2">{b.bk?.count ?? 0}</td>
-                      <td className="px-4 py-2 text-ink/70">{range(b.bk?.days ?? [])}</td>
-                      <td className="px-4 py-2">
-                        {kritik > 0 ? (
-                          <span className="rounded-full bg-amber/20 px-2 py-0.5 font-semibold text-amber">
-                            {kritik}
-                          </span>
-                        ) : (
-                          <span className="text-ink/40">0</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      <section>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-heading text-lg font-semibold">
-            Temsilcilik Detayı{sp.bolge ? ` — ${sp.bolge}` : ""}
-          </h2>
-          {scope.all && (
-            <form method="GET" className="flex items-center gap-2 text-sm">
-              <input type="hidden" name="esik" value={esik} />
-              <select
-                name="bolge"
-                defaultValue={sp.bolge ?? ""}
-                className="rounded-lg border border-mint px-2 py-1"
-              >
-                <option value="">Tüm bölgeler</option>
-                {seciliBolgeler.map((b) => (
-                  <option key={b} value={b!}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-              <button className="rounded-lg bg-primary px-3 py-1.5 text-white">
-                Filtrele
-              </button>
-            </form>
-          )}
-        </div>
-        <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-sm">
-          <YardimTable rows={detayRows} defaultOpen={user.role === "TEMSILCI"} />
-        </div>
-        <p className="mt-2 text-xs text-ink/50">
-          Temsilcilik satırına tıklayınca başvuruların ilçe (yerleşim), ilçe
-          satırına tıklayınca mahalle kırılımı açılır.{" "}
-          Rapordaki sayılar başvurunun <strong>şehir/yerleşimine</strong> göredir;
-          portal linkleri ise başvurunun <strong>sorumlu birimi</strong> filtresiyle
-          açılır. Sorumlu birimi farklı bir birimde (örn. merkezde) olan dosyalar
-          linkte görünmez — bu yüzden portal, buradaki sayıdan az kayıt
-          gösterebilir.
-        </p>
-      </section>
+      <YardimDashboard
+        headerLabel="Genel Görünüm · Tüm Bölgeler"
+        updatedAt={fmtTime(run.finishedAt)}
+        taranan={run.rowCount ?? 0}
+        esik={esik}
+        units={detayRows}
+        bins={bins}
+        binsByBolge={binsByBolge}
+        bolgeler={adminBolgeler}
+        exportUrl={`/api/export/yardim?esik=${esik}`}
+      />
 
       {unmatchedRows.length > 0 && (
         <section>

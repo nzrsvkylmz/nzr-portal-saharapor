@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/dal";
 import { canViewBagis, canViewYardim, isAnyAdmin } from "@/lib/auth/dal";
 import { LogoutButton } from "@/components/LogoutButton";
+import { HeaderNav, type HeaderNavLink } from "@/components/HeaderNav";
 import { MobileNav, type MobileNavLink } from "@/components/MobileNav";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -21,16 +22,29 @@ export default async function AppLayout({
 
   const mobileLinks: MobileNavLink[] = active
     ? ([
-        !sahaRolu && { href: "/", label: "Özet", icon: "🏠" },
-        canViewYardim(user) && { href: "/yardim", label: "Yardım", icon: "🤝" },
-        canViewBagis(user) && { href: "/bagis", label: "Bağış", icon: "₺" },
-        isAnyAdmin(user) && { href: "/admin", label: "Yönetim", icon: "⚙️" },
+        !sahaRolu && { href: "/", label: "Özet", icon: "home" },
+        canViewYardim(user) && { href: "/yardim", label: "Yardım", icon: "yardim" },
+        canViewBagis(user) && { href: "/bagis", label: "Bağış", icon: "bagis" },
+        isAnyAdmin(user) && { href: "/admin", label: "Yönetim", icon: "admin" },
       ].filter(Boolean) as MobileNavLink[])
     : [];
 
+  const headerLinks: HeaderNavLink[] = active
+    ? ([
+        canViewYardim(user) && { href: "/yardim", label: "Yardım Raporu" },
+        canViewBagis(user) && { href: "/bagis", label: "Bağış Raporu" },
+        isAnyAdmin(user) && { href: "/admin", label: "Yönetim" },
+      ].filter(Boolean) as HeaderNavLink[])
+    : [];
+
+  const adSoyad = user.displayName ?? user.portalNick;
+
   return (
     <div className="min-h-screen">
-      <header className="bg-primary text-white">
+      <header
+        className="sticky top-0 z-40 text-white shadow-[0_2px_12px_rgba(0,77,50,0.25)]"
+        style={{ background: "linear-gradient(120deg,#004d32 0%,#00764b 55%,#15855c 100%)" }}
+      >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-8">
             <Link
@@ -43,43 +57,25 @@ export default async function AppLayout({
                 alt="NEZİR"
                 width={34}
                 height={30}
-                className="rounded-lg bg-white p-0.5"
+                className="rounded-xl bg-white p-0.5 shadow-sm"
               />
               NEZİR <span className="font-normal text-white/70">Saha Rapor</span>
             </Link>
-            {active && (
-              <nav className="hidden items-center gap-1 sm:flex">
-                {canViewYardim(user) && (
-                  <Link
-                    href="/yardim"
-                    className="rounded-lg px-3 py-1.5 text-sm text-white/90 transition hover:bg-white/10"
-                  >
-                    Yardım Raporu
-                  </Link>
-                )}
-                {canViewBagis(user) && (
-                  <Link
-                    href="/bagis"
-                    className="rounded-lg px-3 py-1.5 text-sm text-white/90 transition hover:bg-white/10"
-                  >
-                    Bağış Raporu
-                  </Link>
-                )}
-                {isAnyAdmin(user) && (
-                  <Link
-                    href="/admin"
-                    className="rounded-lg px-3 py-1.5 text-sm text-white/90 transition hover:bg-white/10"
-                  >
-                    Yönetim
-                  </Link>
-                )}
-              </nav>
-            )}
+            {active && <HeaderNav links={headerLinks} />}
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-white/70 sm:inline">
-              {user.displayName ?? user.portalNick}
-              {user.role ? ` · ${ROLE_LABELS[user.role]}` : ""}
+            <span className="hidden items-center gap-2 sm:flex">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-sm font-bold">
+                {adSoyad.charAt(0).toLocaleUpperCase("tr")}
+              </span>
+              <span className="leading-tight">
+                <span className="block text-xs font-semibold text-white/95">{adSoyad}</span>
+                {user.role && (
+                  <span className="block text-[10px] text-white/60">
+                    {ROLE_LABELS[user.role]}
+                  </span>
+                )}
+              </span>
             </span>
             <LogoutButton />
           </div>

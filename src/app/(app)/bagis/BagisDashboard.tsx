@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * Saha (bölge müdürü / temsilci) bağış dashboard'u: KPI kartları, aylık
- * gelişim sütun grafiği (plan işaretli), pay donut'u, hedef gerçekleşme
- * sıralaması, il temsilciliği kartları ve modal detay (aylık mini grafik +
- * ilçe kırılımı). Tüm sayılar sunucuda hesaplanır. Mobil öncelikli.
+ * Bağış dashboard'u — saha (bölge müdürü / temsilci) ve yönetici modu.
+ * Saha: KPI kartları, aylık gelişim (plan işaretli), pay donut'u, hedef
+ * sıralaması, il temsilciliği kartları ve modal detay.
+ * Yönetici (admin prop'u verilince): şart seçimi + bölge kartları/grafikleri,
+ * bölgeye tıklayınca o bölgenin illerine inilir (drill-down), il kartından
+ * modala (aylık mini grafik + ilçe kırılımı).
+ * Tüm sayılar sunucuda hesaplanır; burada yalnız gösterim/gezinme var.
  */
 import { useEffect, useState } from "react";
 import { trMoney } from "@/lib/domain/normalize";
@@ -31,6 +34,23 @@ export interface MonthPoint {
   ay: string; // '2026-03'
   amount: number;
   plan: number;
+}
+
+export interface BagisBolge {
+  label: string; // '1.BÖLGE'
+  amount: number;
+  count: number;
+  plan: number | null;
+  monthly: MonthPoint[];
+}
+
+export interface BagisAdminProps {
+  bolgeler: BagisBolge[];
+  sartlar: string[];
+  sart: string | null;
+  planVisible: boolean;
+  belirtilmemisGelir: number;
+  belirtilmemisAdet: number;
 }
 
 // Tema-sadık vurgu paleti (kehribar yalnız düşük-oran uyarısında)
@@ -63,6 +83,14 @@ function oranRenk(oran: number | null) {
   return { fg: "#e8a838", bg: "#faeedb" };
 }
 
+function oranGrad(oran: number) {
+  return oran >= 1
+    ? "linear-gradient(90deg,#00764b,#2f9e77)"
+    : oran >= 0.6
+      ? "linear-gradient(90deg,#b99961,#d4b98a)"
+      : "linear-gradient(90deg,#e8a838,#f0c269)";
+}
+
 function pct(oran: number | null): string {
   if (oran === null) return "—";
   return `%${(oran * 100).toFixed(1).replace(".", ",")}`;
@@ -74,6 +102,14 @@ const I = {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1 1 16 0Z" />
       <circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
+  grid: (c = "currentColor") => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="7" height="7" x="3" y="3" rx="1.5" />
+      <rect width="7" height="7" x="14" y="3" rx="1.5" />
+      <rect width="7" height="7" x="14" y="14" rx="1.5" />
+      <rect width="7" height="7" x="3" y="14" rx="1.5" />
     </svg>
   ),
   coins: (c = "currentColor") => (
@@ -111,6 +147,12 @@ const I = {
       <path d="M15 2v5h5" />
     </svg>
   ),
+  back: (c = "currentColor") => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 19-7-7 7-7" />
+      <path d="M19 12H5" />
+    </svg>
+  ),
   x: (c = "currentColor") => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 6 6 18M6 6l12 12" />
@@ -120,9 +162,9 @@ const I = {
 
 // ---- grafikler ----
 
-/** Aylık gelişim: gerçekleşen sütunları + plan işaretleri (gold çizgi). */
-function MonthlyChart({ data }: { data: MonthPoint[] }) {
-  const max = Math.max(1, ...data.map((d) => Math.max(d.amount, d.plan)));
+/** Aylık gelişim: gerçekleşen sütunları + plan işaretleri (gold kesikli çizgi). */
+function MonthlyChart({ data, planli = true }: { data: MonthPoint[]; planli?: boolean }) {
+  const max = Math.max(1, ...data.map((d) => Math.max(d.amount, planli ? d.plan : 0)));
   return (
     <div>
       <div className="flex h-40 items-end gap-1.5 sm:gap-2">
@@ -145,7 +187,7 @@ function MonthlyChart({ data }: { data: MonthPoint[] }) {
                       : "linear-gradient(180deg,#8fcbb2,#4d9e7e)",
                   }}
                 />
-                {d.plan > 0 && (
+                {planli && d.plan > 0 && (
                   <div
                     className="absolute left-0 right-0"
                     style={{
@@ -165,9 +207,11 @@ function MonthlyChart({ data }: { data: MonthPoint[] }) {
         <span className="flex items-center gap-1">
           <span className="h-2 w-3 rounded-sm" style={{ background: "#00764b" }} /> Gerçekleşen
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 border-t-2 border-dashed" style={{ borderColor: "#b99961" }} /> Plan
-        </span>
+        {planli && (
+          <span className="flex items-center gap-1">
+            <span className="w-3 border-t-2 border-dashed" style={{ borderColor: "#b99961" }} /> Plan
+          </span>
+        )}
       </p>
     </div>
   );
@@ -233,24 +277,28 @@ function ShareDonut({ parts }: { parts: { label: string; value: number }[] }) {
 }
 
 /** Hedef gerçekleşme sıralaması: orana göre yatay barlar. */
-function GoalBars({ units }: { units: BagisDashUnit[] }) {
-  const rows = units
-    .map((u) => ({
-      label: u.label,
-      amount: u.amount,
-      oran: u.plan && u.plan > 0 ? u.amount / u.plan : null,
-    }))
-    .sort((a, b) => (b.oran ?? -1) - (a.oran ?? -1))
-    .slice(0, 8);
+function GoalBars({
+  rows,
+  onPick,
+}: {
+  rows: { label: string; amount: number; oran: number | null }[];
+  onPick?: (label: string) => void;
+}) {
+  const sorted = [...rows].sort((a, b) => (b.oran ?? -1) - (a.oran ?? -1)).slice(0, 10);
   return (
     <div className="space-y-2.5">
-      {rows.map((r) => {
+      {sorted.map((r) => {
         const renk = oranRenk(r.oran);
         const w = r.oran === null ? 0 : Math.min(100, r.oran * 100);
         return (
           <div key={r.label} className="text-sm">
             <div className="mb-0.5 flex items-baseline justify-between gap-2">
-              <span className="min-w-0 truncate text-xs text-ink/75">{r.label}</span>
+              <button
+                onClick={onPick ? () => onPick(r.label) : undefined}
+                className={`min-w-0 truncate text-left text-xs ${onPick ? "text-primary hover:underline" : "text-ink/75"}`}
+              >
+                {r.label}
+              </button>
               <span className="shrink-0 text-[11px] font-bold" style={{ color: renk.fg }}>
                 {pct(r.oran)}
               </span>
@@ -260,12 +308,7 @@ function GoalBars({ units }: { units: BagisDashUnit[] }) {
                 className="h-full rounded-full"
                 style={{
                   width: `${Math.max(r.oran !== null ? 3 : 0, w)}%`,
-                  background:
-                    r.oran !== null && r.oran >= 1
-                      ? "linear-gradient(90deg,#00764b,#2f9e77)"
-                      : r.oran !== null && r.oran >= 0.6
-                        ? "linear-gradient(90deg,#b99961,#d4b98a)"
-                        : "linear-gradient(90deg,#e8a838,#f0c269)",
+                  background: r.oran !== null ? oranGrad(r.oran) : undefined,
                 }}
               />
             </div>
@@ -320,9 +363,93 @@ function KpiCard({
   );
 }
 
-function UnitCard({ u, i, onDetail }: { u: BagisDashUnit; i: number; onDetail: () => void }) {
+function BolgeCard({
+  b,
+  i,
+  planVisible,
+  onOpen,
+}: {
+  b: BagisBolge;
+  i: number;
+  planVisible: boolean;
+  onOpen: () => void;
+}) {
   const a = accentOf(i);
-  const oran = u.plan && u.plan > 0 ? u.amount / u.plan : null;
+  const oran = planVisible && b.plan && b.plan > 0 ? b.amount / b.plan : null;
+  const renk = oranRenk(oran);
+  return (
+    <button
+      onClick={onOpen}
+      className="flex flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm transition hover:shadow-md"
+      style={{ borderTop: `4px solid ${a.main}` }}
+    >
+      <div className="flex-1 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: a.soft, color: a.main }}
+            >
+              {I.grid()}
+            </span>
+            <span className="font-heading text-[15px] font-semibold text-ink">{b.label}</span>
+          </span>
+          {planVisible && (
+            <span
+              className="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold"
+              style={{ color: renk.fg, background: renk.bg }}
+            >
+              {pct(oran)}
+            </span>
+          )}
+        </div>
+        <p className="mt-3">
+          <span className="break-all text-2xl font-bold" style={{ color: a.main }}>
+            {trMoney(b.amount)}
+          </span>
+        </p>
+        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-ink/60">
+          {planVisible && (
+            <span>
+              Plan: <strong className="text-ink/80">{b.plan ? trMoney(b.plan) : "—"}</strong>
+            </span>
+          )}
+          <span>
+            Adet: <strong className="text-ink/80">{b.count}</strong>
+          </span>
+        </div>
+        {planVisible && (
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-cream">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${oran === null ? 0 : Math.min(100, Math.max(3, oran * 100))}%`,
+                background: oran !== null ? oranGrad(oran) : undefined,
+              }}
+            />
+          </div>
+        )}
+      </div>
+      <div className="border-t border-cream px-4 py-2.5 text-xs font-semibold sm:px-5" style={{ color: a.main }}>
+        İlleri gör →
+      </div>
+    </button>
+  );
+}
+
+function UnitCard({
+  u,
+  i,
+  planVisible,
+  onDetail,
+}: {
+  u: BagisDashUnit;
+  i: number;
+  planVisible: boolean;
+  onDetail: () => void;
+}) {
+  const a = accentOf(i);
+  const oran = planVisible && u.plan && u.plan > 0 ? u.amount / u.plan : null;
   const renk = oranRenk(oran);
   return (
     <div
@@ -345,12 +472,14 @@ function UnitCard({ u, i, onDetail }: { u: BagisDashUnit; i: number; onDetail: (
               <span className="text-[11px] text-ink/50">{u.bolgeLabel}</span>
             </span>
           </span>
-          <span
-            className="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold"
-            style={{ color: renk.fg, background: renk.bg }}
-          >
-            {pct(oran)}
-          </span>
+          {planVisible && (
+            <span
+              className="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold"
+              style={{ color: renk.fg, background: renk.bg }}
+            >
+              {pct(oran)}
+            </span>
+          )}
         </div>
 
         <p className="mt-3">
@@ -359,28 +488,27 @@ function UnitCard({ u, i, onDetail }: { u: BagisDashUnit; i: number; onDetail: (
           </span>
         </p>
         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-ink/60">
-          <span>
-            Plan: <strong className="text-ink/80">{u.plan ? trMoney(u.plan) : "—"}</strong>
-          </span>
+          {planVisible && (
+            <span>
+              Plan: <strong className="text-ink/80">{u.plan ? trMoney(u.plan) : "—"}</strong>
+            </span>
+          )}
           <span>
             Adet: <strong className="text-ink/80">{u.count}</strong>
           </span>
         </div>
 
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-cream">
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: `${oran === null ? 0 : Math.min(100, Math.max(3, oran * 100))}%`,
-              background:
-                oran !== null && oran >= 1
-                  ? "linear-gradient(90deg,#00764b,#2f9e77)"
-                  : oran !== null && oran >= 0.6
-                    ? "linear-gradient(90deg,#b99961,#d4b98a)"
-                    : "linear-gradient(90deg,#e8a838,#f0c269)",
-            }}
-          />
-        </div>
+        {planVisible && (
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-cream">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${oran === null ? 0 : Math.min(100, Math.max(3, oran * 100))}%`,
+                background: oran !== null ? oranGrad(oran) : undefined,
+              }}
+            />
+          </div>
+        )}
       </button>
 
       <div className="flex items-center justify-between border-t border-cream px-4 py-2.5 sm:px-5">
@@ -400,10 +528,12 @@ function UnitCard({ u, i, onDetail }: { u: BagisDashUnit; i: number; onDetail: (
 function UnitModal({
   u,
   accent,
+  planVisible,
   onClose,
 }: {
   u: BagisDashUnit;
   accent: { main: string; soft: string; grad: string };
+  planVisible: boolean;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -415,7 +545,7 @@ function UnitModal({
       document.body.style.overflow = "";
     };
   }, [onClose]);
-  const oran = u.plan && u.plan > 0 ? u.amount / u.plan : null;
+  const oran = planVisible && u.plan && u.plan > 0 ? u.amount / u.plan : null;
   const aylik = u.monthly.filter((m) => m.amount > 0 || m.plan > 0);
   const maxChild = Math.max(1, ...u.children.map((c) => c.amount));
   return (
@@ -453,7 +583,7 @@ function UnitModal({
             </div>
             <div className="rounded-xl bg-white/15 px-1 py-2">
               <p className="break-all text-sm font-bold sm:text-base">
-                {u.plan ? trMoney(u.plan) : "—"}
+                {planVisible && u.plan ? trMoney(u.plan) : "—"}
               </p>
               <p className="text-[10px] uppercase tracking-wide text-white/80">Plan</p>
             </div>
@@ -470,7 +600,7 @@ function UnitModal({
               <h4 className="mb-3 flex items-center gap-2 font-heading text-sm font-semibold text-ink/80">
                 {I.trend("#00764b")} Aylık gelişim
               </h4>
-              <MonthlyChart data={aylik} />
+              <MonthlyChart data={aylik} planli={planVisible} />
             </section>
           )}
 
@@ -482,7 +612,8 @@ function UnitModal({
               <ul className="space-y-2">
                 {u.children.map((c) => {
                   const pay = u.amount > 0 ? c.amount / u.amount : 0;
-                  const cOran = c.plan && c.plan > 0 ? c.amount / c.plan : null;
+                  const cOran =
+                    planVisible && c.plan && c.plan > 0 ? c.amount / c.plan : null;
                   return (
                     <li key={c.label} className="rounded-xl bg-cream/70 px-3 py-2">
                       <div className="flex items-baseline justify-between gap-2 text-sm">
@@ -534,6 +665,7 @@ export default function BagisDashboard({
   exportUrl,
   units,
   monthly,
+  admin,
 }: {
   headerLabel: string;
   updatedAt: string;
@@ -543,20 +675,72 @@ export default function BagisDashboard({
   exportUrl: string;
   units: BagisDashUnit[];
   monthly: MonthPoint[];
+  /** Yönetici modu: bölge özetleri + şart seçimi (drill-down ile illere inilir). */
+  admin?: BagisAdminProps;
 }) {
-  const [detail, setDetail] = useState<number | null>(null);
-  const gelir = units.reduce((s, u) => s + u.amount, 0);
-  const adet = units.reduce((s, u) => s + u.count, 0);
-  const plan = units.reduce((s, u) => s + (u.plan ?? 0), 0);
-  const oran = plan > 0 ? gelir / plan : null;
-  const cokBirim = units.length > 1;
+  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [selBolge, setSelBolge] = useState<string | null>(null);
+  const planVisible = admin ? admin.planVisible : true;
 
-  // pay donut'u: çok birimde temsilcilik payları; tek birimde ilçe payları
-  const payParts = cokBirim
-    ? units.map((u) => ({ label: u.label, value: u.amount }))
-    : (units[0]?.children ?? []).map((c) => ({ label: c.label, value: c.amount }));
+  const visUnits = admin && selBolge ? units.filter((u) => u.bolgeLabel === selBolge) : units;
+  const selBolgeData = admin && selBolge ? admin.bolgeler.find((b) => b.label === selBolge) : null;
 
-  const siraliUnits = [...units].sort((a, b) => b.amount - a.amount);
+  // KPI kaynakları: yönetici genel görünümde bölge toplamları, aksi halde görünür birimler
+  const gelir =
+    admin && !selBolge
+      ? admin.bolgeler.reduce((s, b) => s + b.amount, 0)
+      : selBolgeData
+        ? selBolgeData.amount
+        : visUnits.reduce((s, u) => s + u.amount, 0);
+  const adet =
+    admin && !selBolge
+      ? admin.bolgeler.reduce((s, b) => s + b.count, 0)
+      : selBolgeData
+        ? selBolgeData.count
+        : visUnits.reduce((s, u) => s + u.count, 0);
+  const plan =
+    admin && !selBolge
+      ? admin.bolgeler.reduce((s, b) => s + (b.plan ?? 0), 0)
+      : selBolgeData
+        ? (selBolgeData.plan ?? 0)
+        : visUnits.reduce((s, u) => s + (u.plan ?? 0), 0);
+  const oran = planVisible && plan > 0 ? gelir / plan : null;
+
+  const visMonthly = selBolgeData ? selBolgeData.monthly : monthly;
+  const cokBirim = visUnits.length > 1;
+  const detailIdx = detailKey ? visUnits.findIndex((u) => u.key === detailKey) : -1;
+
+  // pay donut'u: yönetici genelde bölge payları; bölge içinde / sahada il payları;
+  // tek birimde ilçe payları
+  const payParts =
+    admin && !selBolge
+      ? admin.bolgeler.map((b) => ({ label: b.label, value: b.amount }))
+      : cokBirim
+        ? visUnits.map((u) => ({ label: u.label, value: u.amount }))
+        : (visUnits[0]?.children ?? []).map((c) => ({ label: c.label, value: c.amount }));
+
+  const goalRows =
+    admin && !selBolge
+      ? admin.bolgeler.map((b) => ({
+          label: b.label,
+          amount: b.amount,
+          oran: b.plan && b.plan > 0 ? b.amount / b.plan : null,
+        }))
+      : visUnits.map((u) => ({
+          label: u.label,
+          amount: u.amount,
+          oran: u.plan && u.plan > 0 ? u.amount / u.plan : null,
+        }));
+
+  const siraliUnits = [...visUnits].sort((a, b) => b.amount - a.amount);
+  const kartGorunumu = !admin || selBolge !== null;
+
+  // şart seçici linkleri (yönetici): ay aralığını koruyarak GET
+  const sartHref = (s: string | null) => {
+    const qs = new URLSearchParams({ ayA, ayB });
+    if (s) qs.set("sart", s);
+    return `/bagis?${qs}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -564,10 +748,10 @@ export default function BagisDashboard({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-primary">
-            {headerLabel}
+            {admin && selBolge ? `${selBolge} · Bölge Detayı` : headerLabel}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-primary-dark sm:text-3xl">
-            Genel Bağış Raporu
+            {admin ? (admin.sart ?? "Bağış Raporu") : "Genel Bağış Raporu"}
           </h1>
           <p className="mt-1 text-sm text-ink/60">
             {ayLabel} · {updatedAt} tarihinde güncellendi
@@ -575,6 +759,7 @@ export default function BagisDashboard({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <form method="GET" className="flex flex-wrap items-center gap-2 text-sm">
+            {admin?.sart && <input type="hidden" name="sart" value={admin.sart} />}
             <input
               name="ayA"
               type="month"
@@ -601,99 +786,206 @@ export default function BagisDashboard({
         </div>
       </div>
 
+      {/* şart seçimi (yönetici) */}
+      {admin && admin.sartlar.length > 0 && (
+        <div className="flex flex-wrap gap-2 text-sm">
+          {[null, ...admin.sartlar].map((s) => {
+            const seçili = s === admin.sart;
+            return (
+              <a
+                key={s ?? "tumu"}
+                href={sartHref(s)}
+                className={
+                  seçili
+                    ? "rounded-full px-4 py-1.5 font-semibold text-white"
+                    : "rounded-full bg-white px-4 py-1.5 text-ink/70 shadow-sm transition hover:bg-mint"
+                }
+                style={seçili ? { background: "linear-gradient(135deg,#004d32,#00764b)" } : undefined}
+              >
+                {s ?? "Tümü"}
+              </a>
+            );
+          })}
+        </div>
+      )}
+
+      {/* bölge seçiliyken geri dönüş */}
+      {admin && selBolge && (
+        <button
+          onClick={() => setSelBolge(null)}
+          className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-medium text-primary shadow-sm transition hover:bg-mint/30"
+        >
+          {I.back()} Tüm bölgelere dön
+        </button>
+      )}
+
       {/* KPI kartları */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           icon={I.coins()}
           label="Toplam Gelir"
-          value={trMoney(gelir)}
-          sub="sorumluluk alanınızda"
-          tone="green"
-        />
-        <KpiCard icon={I.hash()} label="Bağış Adedi" value={String(adet)} sub={ayLabel} tone="deep" />
-        <KpiCard
-          icon={I.target()}
-          label="Plan Hedefi"
-          value={plan > 0 ? trMoney(plan) : "—"}
-          sub={ayLabel}
-          tone="gold"
-        />
-        <KpiCard
-          icon={I.trend()}
-          label="Ulaşma Oranı"
-          value={pct(oran)}
+          value={trMoney(gelir + (admin && !selBolge ? admin.belirtilmemisGelir : 0))}
           sub={
-            oran !== null ? (
-              <span className="mt-1 block h-1.5 w-full overflow-hidden rounded-full bg-cream">
-                <span
-                  className="block h-full rounded-full"
-                  style={{
-                    width: `${Math.min(100, oran * 100)}%`,
-                    background:
-                      oran >= 1
-                        ? "linear-gradient(90deg,#00764b,#2f9e77)"
-                        : oran >= 0.6
-                          ? "linear-gradient(90deg,#b99961,#d4b98a)"
-                          : "linear-gradient(90deg,#e8a838,#f0c269)",
-                  }}
-                />
+            admin && !selBolge && admin.belirtilmemisGelir > 0 ? (
+              <span className="mt-1 block space-y-1">
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: "#00764b" }}
+                  />
+                  <span className="text-ink/60">Bölgeler:</span>
+                  <strong className="text-xs" style={{ color: "#00764b" }}>
+                    {trMoney(gelir)}
+                  </strong>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: "#b99961" }}
+                  />
+                  <span className="text-ink/60">Belirtilmemiş:</span>
+                  <strong className="text-xs" style={{ color: "#b99961" }}>
+                    {trMoney(admin.belirtilmemisGelir)}
+                  </strong>
+                </span>
               </span>
+            ) : admin ? (
+              (selBolge ?? "tüm bölgeler")
             ) : (
-              "plan girilmedi"
+              "sorumluluk alanınızda"
             )
           }
-          tone="oran"
+          tone="green"
         />
+        <KpiCard
+          icon={I.hash()}
+          label="Bağış Adedi"
+          value={String(adet + (admin && !selBolge ? admin.belirtilmemisAdet : 0))}
+          sub={ayLabel}
+          tone="deep"
+        />
+        {planVisible && (
+          <KpiCard
+            icon={I.target()}
+            label={admin && !selBolge ? "Plan Hedefi (Bölgeler)" : "Plan Hedefi"}
+            value={plan > 0 ? trMoney(plan) : "—"}
+            sub={ayLabel}
+            tone="gold"
+          />
+        )}
+        {planVisible && (
+          <KpiCard
+            icon={I.trend()}
+            label="Ulaşma Oranı"
+            value={pct(oran)}
+            sub={
+              oran !== null ? (
+                <span className="mt-1 block h-1.5 w-full overflow-hidden rounded-full bg-cream">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{ width: `${Math.min(100, oran * 100)}%`, background: oranGrad(oran) }}
+                  />
+                </span>
+              ) : (
+                "plan girilmedi"
+              )
+            }
+            tone="oran"
+          />
+        )}
       </div>
 
       {/* grafikler */}
-      <div className={`grid gap-4 ${cokBirim ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
-        <div className={`rounded-2xl bg-white p-5 shadow-sm ${cokBirim ? "lg:col-span-1" : ""}`}>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl bg-white p-5 shadow-sm">
           <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
             Aylık Gelişim (yıl geneli)
           </h3>
-          <MonthlyChart data={monthly} />
+          <MonthlyChart data={visMonthly} planli={planVisible} />
         </div>
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
-            {cokBirim ? "Temsilcilik Payları" : "Kırılım Payları"} ({ayLabel})
+            {admin && !selBolge
+              ? "Bölge Payları"
+              : cokBirim
+                ? "Temsilcilik Payları"
+                : "Kırılım Payları"}{" "}
+            ({ayLabel})
           </h3>
           <ShareDonut parts={payParts} />
         </div>
-        {cokBirim && (
+        {planVisible && (goalRows.length > 1 || (admin && !selBolge)) && (
           <div className="rounded-2xl bg-white p-5 shadow-sm">
             <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
               Hedef Gerçekleşme Sıralaması
             </h3>
-            <GoalBars units={units} />
+            <GoalBars
+              rows={goalRows}
+              onPick={admin && !selBolge ? (l) => setSelBolge(l) : undefined}
+            />
           </div>
         )}
       </div>
 
-      {/* temsilcilik kartları */}
-      {units.length === 0 ? (
-        <div className="rounded-2xl bg-white p-10 text-center text-ink/60 shadow-sm">
-          Bu kapsamda bağış kaydı yok.
-        </div>
-      ) : (
+      {/* bölge kartları (yönetici, seçim yokken) */}
+      {admin && !selBolge && (
         <section>
           <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="font-heading text-lg font-semibold text-ink">
-              {cokBirim ? "Temsilcilik Özetleri" : "Temsilcilik Özeti"}
-            </h2>
-            <p className="text-xs text-ink/50">karta dokununca detay açılır</p>
+            <h2 className="font-heading text-lg font-semibold text-ink">Bölge Özetleri</h2>
+            <p className="text-xs text-ink/50">bölgeye dokununca iller açılır</p>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
-            {siraliUnits.map((u) => {
-              const idx = units.findIndex((x) => x.key === u.key);
-              return <UnitCard key={u.key} u={u} i={idx} onDetail={() => setDetail(idx)} />;
-            })}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            {admin.bolgeler.map((b, i) => (
+              <BolgeCard
+                key={b.label}
+                b={b}
+                i={i}
+                planVisible={planVisible}
+                onOpen={() => setSelBolge(b.label)}
+              />
+            ))}
           </div>
         </section>
       )}
 
-      {detail !== null && units[detail] && (
-        <UnitModal u={units[detail]} accent={accentOf(detail)} onClose={() => setDetail(null)} />
+      {/* il temsilciliği kartları */}
+      {kartGorunumu &&
+        (visUnits.length === 0 ? (
+          <div className="rounded-2xl bg-white p-10 text-center text-ink/60 shadow-sm">
+            Bu kapsamda bağış kaydı yok.
+          </div>
+        ) : (
+          <section>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="font-heading text-lg font-semibold text-ink">
+                {cokBirim ? "Temsilcilik Özetleri" : "Temsilcilik Özeti"}
+              </h2>
+              <p className="text-xs text-ink/50">karta dokununca detay açılır</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+              {siraliUnits.map((u) => {
+                const idx = visUnits.findIndex((x) => x.key === u.key);
+                return (
+                  <UnitCard
+                    key={u.key}
+                    u={u}
+                    i={idx}
+                    planVisible={planVisible}
+                    onDetail={() => setDetailKey(u.key)}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        ))}
+
+      {detailIdx !== -1 && (
+        <UnitModal
+          u={visUnits[detailIdx]}
+          accent={accentOf(detailIdx)}
+          planVisible={planVisible}
+          onClose={() => setDetailKey(null)}
+        />
       )}
     </div>
   );

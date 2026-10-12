@@ -74,24 +74,31 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <main
+      className="relative flex min-h-screen items-center justify-center overflow-hidden p-4"
+      style={{
+        background:
+          "radial-gradient(1200px 600px at 85% -10%, rgba(200,237,217,0.25), transparent 60%), linear-gradient(140deg,#004d32 0%,#00764b 55%,#2f9e77 115%)",
+      }}
+    >
+      {/* dekoratif ışık lekeleri */}
+      <div className="pointer-events-none absolute -left-24 top-1/4 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 right-0 h-96 w-96 rounded-full bg-mint/20 blur-3xl" />
+      <div className="pointer-events-none absolute right-1/4 top-10 h-40 w-40 rounded-full bg-gold/20 blur-2xl" />
+
+      <div className="relative w-full max-w-sm">
         <div className="mb-8 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.png"
-            alt="NEZİR"
-            width={88}
-            height={76}
-            className="mx-auto mb-3"
-          />
-          <div className="font-heading text-3xl font-bold tracking-wide text-primary">
+          <span className="mx-auto mb-4 inline-flex h-20 w-20 items-center justify-center rounded-3xl bg-white shadow-lg">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="NEZİR" width={56} height={48} />
+          </span>
+          <div className="font-heading text-3xl font-bold tracking-wide text-white">
             NEZİR
           </div>
-          <p className="mt-1 text-sm text-ink/70">Saha Rapor Portalı</p>
+          <p className="mt-1 text-sm text-white/75">Saha Rapor Portalı</p>
         </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-sm">
+        <div className="rounded-3xl bg-white/95 p-8 shadow-2xl backdrop-blur">
           {step === "credentials" ? (
             <form onSubmit={submitCredentials} className="space-y-4">
               <p className="text-sm text-ink/70">
@@ -144,7 +151,8 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={busy}
-                className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:opacity-60"
+                className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg,#004d32,#00764b)" }}
               >
                 {busy ? "Giriş yapılıyor…" : "Giriş yap"}
               </button>
@@ -173,7 +181,8 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={busy}
-                className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:opacity-60"
+                className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg,#004d32,#00764b)" }}
               >
                 {busy ? "Doğrulanıyor…" : "Doğrula"}
               </button>
@@ -192,7 +201,7 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-ink/50">
+        <p className="mt-6 text-center text-xs text-white/60">
           Hayra Adanmış Gönüller
         </p>
       </div>

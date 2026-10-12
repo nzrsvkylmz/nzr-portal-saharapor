@@ -65,6 +65,21 @@ const ACCENTS = [
 ];
 const accentOf = (i: number) => ACCENTS[i % ACCENTS.length];
 
+/**
+ * Kart vurgu rengi hedefe ulaşma oranına göre standardize:
+ * >%75 açık yeşil · %50–75 koyu yeşil · <%50 turuncu (kehribar) ·
+ * plan yoksa nötr (hasat altını).
+ */
+function oranAccent(oran: number | null) {
+  if (oran === null)
+    return { main: "#b99961", soft: "#f3ecdf", grad: "linear-gradient(135deg,#b99961,#d4b98a)" };
+  if (oran >= 0.75)
+    return { main: "#2f9e77", soft: "#e3f4ed", grad: "linear-gradient(135deg,#2f9e77,#6cc3a1)" };
+  if (oran >= 0.5)
+    return { main: "#004d32", soft: "#dcebe3", grad: "linear-gradient(135deg,#004d32,#00764b)" };
+  return { main: "#e8a838", soft: "#faeedb", grad: "linear-gradient(135deg,#e8a838,#f0c269)" };
+}
+
 const AY_KISA = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
 const ayAd = (ym: string) => {
   const m = Number(ym.slice(5, 7));
@@ -537,17 +552,15 @@ function KpiCard({
 
 function BolgeCard({
   b,
-  i,
   planVisible,
   onOpen,
 }: {
   b: BagisBolge;
-  i: number;
   planVisible: boolean;
   onOpen: () => void;
 }) {
-  const a = accentOf(i);
   const oran = planVisible && b.plan && b.plan > 0 ? b.amount / b.plan : null;
+  const a = oranAccent(oran);
   const renk = oranRenk(oran);
   return (
     <button
@@ -611,17 +624,15 @@ function BolgeCard({
 
 function UnitCard({
   u,
-  i,
   planVisible,
   onDetail,
 }: {
   u: BagisDashUnit;
-  i: number;
   planVisible: boolean;
   onDetail: () => void;
 }) {
-  const a = accentOf(i);
   const oran = planVisible && u.plan && u.plan > 0 ? u.amount / u.plan : null;
+  const a = oranAccent(oran);
   const renk = oranRenk(oran);
   return (
     <div
@@ -1131,11 +1142,10 @@ export default function BagisDashboard({
             <p className="text-xs text-ink/50">bölgeye dokununca iller açılır</p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-            {admin.bolgeler.map((b, i) => (
+            {admin.bolgeler.map((b) => (
               <BolgeCard
                 key={b.label}
                 b={b}
-                i={i}
                 planVisible={planVisible}
                 onOpen={() => selectBolge(b.label)}
               />
@@ -1159,18 +1169,14 @@ export default function BagisDashboard({
               <p className="text-xs text-ink/50">karta dokununca detay açılır</p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
-              {siraliUnits.map((u) => {
-                const idx = visUnits.findIndex((x) => x.key === u.key);
-                return (
-                  <UnitCard
-                    key={u.key}
-                    u={u}
-                    i={idx}
-                    planVisible={planVisible}
-                    onDetail={() => setDetailKey(u.key)}
-                  />
-                );
-              })}
+              {siraliUnits.map((u) => (
+                <UnitCard
+                  key={u.key}
+                  u={u}
+                  planVisible={planVisible}
+                  onDetail={() => setDetailKey(u.key)}
+                />
+              ))}
             </div>
           </section>
         ))}
@@ -1178,7 +1184,11 @@ export default function BagisDashboard({
       {detailIdx !== -1 && (
         <UnitModal
           u={visUnits[detailIdx]}
-          accent={accentOf(detailIdx)}
+          accent={oranAccent(
+            planVisible && visUnits[detailIdx].plan && visUnits[detailIdx].plan! > 0
+              ? visUnits[detailIdx].amount / visUnits[detailIdx].plan!
+              : null,
+          )}
           planVisible={planVisible}
           onClose={() => setDetailKey(null)}
         />

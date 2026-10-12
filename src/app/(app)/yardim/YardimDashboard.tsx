@@ -36,6 +36,16 @@ const ACCENTS = [
 ];
 const accentOf = (i: number) => ACCENTS[i % ACCENTS.length];
 
+/**
+ * Kart vurgu rengi standardize: kritik eşiği aşan dosyası olanlar turuncu
+ * (kehribar), olmayanlar yeşil. Kritik sayısı seçili eşiğe göre hesaplanır.
+ */
+function kritikAccent(kritik: number) {
+  return kritik > 0
+    ? { main: "#e8a838", soft: "#faeedb", grad: "linear-gradient(135deg,#e8a838,#f0c269)" }
+    : { main: "#00764b", soft: "#e2f3ea", grad: "linear-gradient(135deg,#00764b,#2f9e77)" };
+}
+
 // ---- küçük ikonlar (inline SVG) ----
 const I = {
   pin: (c = "currentColor") => (
@@ -294,8 +304,8 @@ function KpiCard({
   );
 }
 
-function BolgeCard({ b, i, onOpen }: { b: YardimBolge; i: number; onOpen: () => void }) {
-  const a = accentOf(i);
+function BolgeCard({ b, onOpen }: { b: YardimBolge; onOpen: () => void }) {
+  const a = kritikAccent(b.kritik);
   const toplam = b.si + b.bk;
   const siPct = toplam ? Math.round((b.si / toplam) * 100) : 0;
   return (
@@ -349,14 +359,12 @@ function BolgeCard({ b, i, onOpen }: { b: YardimBolge; i: number; onOpen: () => 
 
 function UnitCard({
   u,
-  i,
   onDetail,
 }: {
   u: YardimUnitRow;
-  i: number;
   onDetail: () => void;
 }) {
-  const a = accentOf(i);
+  const a = kritikAccent(u.kritik);
   const toplam = u.siCount + u.bkCount;
   const siPct = toplam ? Math.round((u.siCount / toplam) * 100) : 0;
   return (
@@ -824,8 +832,8 @@ export default function YardimDashboard({
                 <p className="text-xs text-ink/50">bölgeye dokununca temsilcilikler açılır</p>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 lg:grid-cols-3">
-                {bolgeler!.map((b, i) => (
-                  <BolgeCard key={b.label} b={b} i={i} onOpen={() => selectBolge(b.label)} />
+                {bolgeler!.map((b) => (
+                  <BolgeCard key={b.label} b={b} onOpen={() => selectBolge(b.label)} />
                 ))}
               </div>
             </section>
@@ -841,8 +849,8 @@ export default function YardimDashboard({
                 <p className="text-xs text-ink/50">karta dokununca detay açılır</p>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
-                {visUnits.map((u, i) => (
-                  <UnitCard key={u.key} u={u} i={i} onDetail={() => setDetailKey(u.key)} />
+                {visUnits.map((u) => (
+                  <UnitCard key={u.key} u={u} onDetail={() => setDetailKey(u.key)} />
                 ))}
               </div>
             </section>
@@ -853,7 +861,7 @@ export default function YardimDashboard({
       {detailIdx !== -1 && (
         <UnitModal
           u={visUnits[detailIdx]}
-          accent={accentOf(detailIdx)}
+          accent={kritikAccent(visUnits[detailIdx].kritik)}
           esik={esik}
           onClose={() => setDetailKey(null)}
         />

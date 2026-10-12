@@ -69,12 +69,14 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       tems: "Malatya",
       stageKey: "si",
       gun: 92,
+      yerlesim: "Battalgazi",
     });
     expect(kayitlar[1]).toEqual({
       bolge: "18.BÖLGE",
       tems: "Esenyurt",
       stageKey: "bk",
       gun: 6,
+      yerlesim: "Esenyurt",
     });
   });
 });

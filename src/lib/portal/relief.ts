@@ -70,6 +70,7 @@ export interface PendingRecord {
   tems: string;
   stageKey: string;
   gun: number;
+  yerlesim: string; // ilçe kırılımı için ham Yerleşim etiketi (kişisel veri değil)
 }
 
 /**
@@ -109,12 +110,19 @@ export async function fetchPending(
     if (!stageKey) continue;
     const tarih = parseTrDate(iT < r.length ? r[iT] : "");
     const gun = tarih ? daysBetween(bugun, tarih) : -1;
+    const yerlesimRaw = (iYer < r.length ? r[iYer] : "").replace(/\s+/g, " ").trim();
     const [bolge, tems] = eslestir(
       maps,
       iSeh < r.length ? r[iSeh] : "",
-      iYer < r.length ? r[iYer] : "",
+      yerlesimRaw,
     );
-    kayitlar.push({ bolge, tems, stageKey, gun });
+    kayitlar.push({
+      bolge,
+      tems,
+      stageKey,
+      gun,
+      yerlesim: yerlesimRaw || "Belirtilmemiş",
+    });
   }
   return { kayitlar, okunan: data.length };
 }

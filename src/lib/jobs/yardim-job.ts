@@ -104,16 +104,20 @@ export async function runYardimJob(
 
   await progress(80, "Özet hesaplanıyor ve kaydediliyor…");
 
-  // bölge → stage → günler ve birim → stage → günler
+  // bölge → stage → günler ve birim → stage → günler + ilçe(Yerleşim) kırılımı
   const bolgeAgg = new Map<string, Map<string, number[]>>();
-  const unitAgg = new Map<string, Map<string, number[]>>(); // key: `${bolge}|${tems}`
+  type StageAcc = { days: number[]; districts: Map<string, number[]> };
+  const unitAgg = new Map<string, Map<string, StageAcc>>(); // key: `${bolge}|${tems}`
   for (const k of kayitlar) {
     const b = bolgeAgg.get(k.bolge) ?? new Map<string, number[]>();
     b.set(k.stageKey, [...(b.get(k.stageKey) ?? []), k.gun]);
     bolgeAgg.set(k.bolge, b);
     const key = `${k.bolge}|${k.tems}`;
-    const u = unitAgg.get(key) ?? new Map<string, number[]>();
-    u.set(k.stageKey, [...(u.get(k.stageKey) ?? []), k.gun]);
+    const u = unitAgg.get(key) ?? new Map<string, StageAcc>();
+    const acc: StageAcc = u.get(k.stageKey) ?? { days: [], districts: new Map() };
+    acc.days.push(k.gun);
+    acc.districts.set(k.yerlesim, [...(acc.districts.get(k.yerlesim) ?? []), k.gun]);
+    u.set(k.stageKey, acc);
     unitAgg.set(key, u);
   }
 
@@ -141,7 +145,7 @@ export async function runYardimJob(
   for (const [key, stagesMap] of unitAgg) {
     const [bolge, tems] = key.split("|");
     const unmatched = bolge === UNMATCHED;
-    for (const [stageKey, days] of stagesMap) {
+    for (const [stageKey, acc] of stagesMap) {
       rows.push({
         runId,
         scope: unmatched ? "unmatched" : "unit",
@@ -149,8 +153,9 @@ export async function runYardimJob(
         unitId: unmatched ? null : (idByName.get(tems) ?? null),
         unitLabel: tems,
         stageKey,
-        days,
-        count: days.length,
+        days: acc.days,
+        count: acc.days.length,
+        districts: unmatched ? null : Object.fromEntries(acc.districts),
       });
     }
   }

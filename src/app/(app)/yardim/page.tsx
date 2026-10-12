@@ -7,6 +7,7 @@ import { visibleScope } from "@/lib/domain/scope";
 import { toTrDate } from "@/lib/domain/normalize";
 import { BASE_URL } from "@/lib/portal/client";
 import { DEFAULT_FLOW, portalLink } from "@/lib/portal/relief";
+import YardimTable, { type YardimUnitRow } from "./YardimTable";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +16,15 @@ interface StageData {
   count: number;
 }
 
+type DistrictDays = Record<string, number[]>;
+
 interface RowData {
   label: string;
   unitId: number | null;
   si?: StageData;
   bk?: StageData;
+  siDistricts?: DistrictDays;
+  bkDistricts?: DistrictDays;
 }
 
 function range(days: number[]): string {
@@ -92,8 +97,14 @@ export default async function YardimPage({
       const key = keyOf(r);
       const cur = out.get(key) ?? { label: key, unitId: r.unitId ?? null };
       const data: StageData = { days: (r.days as number[]) ?? [], count: r.count };
-      if (r.stageKey === "si") cur.si = data;
-      else if (r.stageKey === "bk") cur.bk = data;
+      const districts = (r.districts as DistrictDays | null) ?? undefined;
+      if (r.stageKey === "si") {
+        cur.si = data;
+        cur.siDistricts = districts;
+      } else if (r.stageKey === "bk") {
+        cur.bk = data;
+        cur.bkDistricts = districts;
+      }
       if (r.unitId) cur.unitId = r.unitId;
       out.set(key, cur);
     }
@@ -135,6 +146,53 @@ export default async function YardimPage({
     birimler.reduce((s, b) => s + kritikAdet(b, esik), 0);
 
   const esikTarihi = toTrDate(new Date(Date.now() - esik * 86400_000));
+
+  // Temsilcilik Detayı satırları + ilçe (Yerleşim) kırılımı — tüm sayılar
+  // burada hesaplanır, client bileşeni yalnız aç/kapa yapar.
+  const detayRows: YardimUnitRow[] = birimler.map((b) => {
+    const [bolge, tems] = b.label.split("|");
+    const depId = b.unitId ? depIdByUnitId.get(b.unitId) : undefined;
+    const yerlesimler = new Set([
+      ...Object.keys(b.siDistricts ?? {}),
+      ...Object.keys(b.bkDistricts ?? {}),
+    ]);
+    let children = [...yerlesimler]
+      .map((y) => {
+        const si = b.siDistricts?.[y] ?? [];
+        const bk = b.bkDistricts?.[y] ?? [];
+        return {
+          label: y,
+          siCount: si.length,
+          siRange: range(si),
+          bkCount: bk.length,
+          bkRange: range(bk),
+          kritik: [...si, ...bk].filter((d) => d > esik).length,
+        };
+      })
+      .sort((a, z) => z.siCount + z.bkCount - (a.siCount + a.bkCount));
+    // tek yerleşim ve adı temsilcilikle aynıysa kırılım bilgi katmaz
+    if (
+      children.length === 1 &&
+      children[0].label.toLocaleLowerCase("tr") === (tems ?? "").toLocaleLowerCase("tr")
+    ) {
+      children = [];
+    }
+    return {
+      key: b.label,
+      bolge: bolge ?? "",
+      tems: tems ?? "",
+      siCount: b.si?.count ?? 0,
+      siRange: range(b.si?.days ?? []),
+      bkCount: b.bk?.count ?? 0,
+      bkRange: range(b.bk?.days ?? []),
+      kritik: kritikAdet(b, esik),
+      portalAllUrl: depId ? portalLink(BASE_URL, DEFAULT_FLOW, depId) : null,
+      portalKritikUrl: depId
+        ? portalLink(BASE_URL, DEFAULT_FLOW, depId, esikTarihi)
+        : null,
+      children,
+    };
+  });
   const seciliBolgeler = scope.all
     ? [...new Set(aggRows.filter((r) => r.scope === "unit").map((r) => r.bolgeLabel))]
         .filter(Boolean)
@@ -283,78 +341,11 @@ export default async function YardimPage({
           )}
         </div>
         <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-primary text-left text-white">
-                <th className="px-4 py-2.5 font-medium">Bölge / Temsilcilik</th>
-                <th className="px-4 py-2.5 font-medium">Sosyal İnceleme</th>
-                <th className="px-4 py-2.5 font-medium">Gün Aralığı</th>
-                <th className="px-4 py-2.5 font-medium">Koordinatör Kararı</th>
-                <th className="px-4 py-2.5 font-medium">Gün Aralığı</th>
-                <th className="px-4 py-2.5 font-medium">Kritik</th>
-                <th className="px-4 py-2.5 font-medium">Portal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {birimler.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-ink/50">
-                    Bu kapsamda bekleyen başvuru yok.
-                  </td>
-                </tr>
-              )}
-              {birimler.map((b, i) => {
-                const [bolge, tems] = b.label.split("|");
-                const kritik = kritikAdet(b, esik);
-                const depId = b.unitId ? depIdByUnitId.get(b.unitId) : undefined;
-                return (
-                  <tr key={b.label} className={i % 2 ? "bg-cream/60" : ""}>
-                    <td className="px-4 py-2">
-                      <span className="text-xs text-ink/50">{bolge}</span>{" "}
-                      <span className="font-medium">{tems}</span>
-                    </td>
-                    <td className="px-4 py-2">{b.si?.count ?? 0}</td>
-                    <td className="px-4 py-2 text-ink/70">{range(b.si?.days ?? [])}</td>
-                    <td className="px-4 py-2">{b.bk?.count ?? 0}</td>
-                    <td className="px-4 py-2 text-ink/70">{range(b.bk?.days ?? [])}</td>
-                    <td className="px-4 py-2">
-                      {kritik > 0 && depId ? (
-                        <a
-                          href={portalLink(BASE_URL, DEFAULT_FLOW, depId, esikTarihi)}
-                          target="_blank"
-                          className="rounded-full bg-amber/20 px-2 py-0.5 font-semibold text-amber hover:bg-amber/30"
-                          title={`${esik} günden eski dosyaları portalda aç`}
-                        >
-                          {kritik} ↗
-                        </a>
-                      ) : kritik > 0 ? (
-                        <span className="rounded-full bg-amber/20 px-2 py-0.5 font-semibold text-amber">
-                          {kritik}
-                        </span>
-                      ) : (
-                        <span className="text-ink/40">0</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2">
-                      {depId ? (
-                        <a
-                          href={portalLink(BASE_URL, DEFAULT_FLOW, depId)}
-                          target="_blank"
-                          className="text-primary hover:underline"
-                        >
-                          Aç ↗
-                        </a>
-                      ) : (
-                        <span className="text-ink/30">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <YardimTable rows={detayRows} defaultOpen={user.role === "TEMSILCI"} />
         </div>
         <p className="mt-2 text-xs text-ink/50">
+          Temsilcilik satırına tıklayınca başvuruların ilçe (yerleşim) kırılımı
+          açılır.{" "}
           Rapordaki sayılar başvurunun <strong>şehir/yerleşimine</strong> göredir;
           portal linkleri ise başvurunun <strong>sorumlu birimi</strong> filtresiyle
           açılır. Sorumlu birimi farklı bir birimde (örn. merkezde) olan dosyalar

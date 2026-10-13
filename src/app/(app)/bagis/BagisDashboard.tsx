@@ -51,8 +51,8 @@ export interface BagisAdminProps {
   sartlar: string[];
   sart: string | null;
   planVisible: boolean;
-  belirtilmemisGelir: number;
-  belirtilmemisAdet: number;
+  /** bölgeye eşlenmeyen satırlar (BELİRTİLMEMİŞ, Y.DIŞINDAN vb.) */
+  digerler: { label: string; amount: number; count: number }[];
 }
 
 // Tema-sadık vurgu paleti (kehribar yalnız düşük-oran uyarısında)
@@ -506,6 +506,97 @@ function GoalBars({
   );
 }
 
+/**
+ * Bölge özet tablosu (yönetici): tüm bölgeler tek listede — plan, gerçekleşen
+ * ve oran. BELİRTİLMEMİŞ / Y.DIŞINDAN gibi bölgeye eşlenmeyen satırlar sıra
+ * numarasız alt satırlarda, en altta genel toplam. Plan görünmeyen şartlarda
+ * (ör. Sadaka) yalnız gerçekleşen sütunu kalır. Bölge satırına tıklanınca
+ * o bölgenin illerine inilir.
+ */
+function BolgeTable({
+  bolgeler,
+  digerler,
+  planVisible,
+  onPick,
+}: {
+  bolgeler: BagisBolge[];
+  digerler: { label: string; amount: number; count: number }[];
+  planVisible: boolean;
+  onPick: (label: string) => void;
+}) {
+  const bolgeGelir = bolgeler.reduce((s, b) => s + b.amount, 0);
+  const digerGelir = digerler.reduce((s, d) => s + d.amount, 0);
+  const oranHucre = (oran: number | null) => {
+    const renk = oranRenk(oran);
+    return (
+      <span
+        className="inline-block rounded-full px-2 py-0.5 text-xs font-bold"
+        style={oran !== null ? { color: renk.fg, background: renk.bg } : undefined}
+      >
+        {pct(oran)}
+      </span>
+    );
+  };
+  return (
+    <div className="overflow-x-auto rounded-2xl bg-white shadow-sm">
+      <table className="w-full min-w-[480px] text-sm">
+        <thead>
+          <tr className="bg-primary text-left text-white">
+            <th className="w-12 px-3 py-2.5 text-center font-medium">Sıra</th>
+            <th className="px-4 py-2.5 font-medium">Bölge</th>
+            {planVisible && <th className="px-4 py-2.5 text-center font-medium">Plan</th>}
+            <th className="px-4 py-2.5 text-center font-medium">Gerçekleşen</th>
+            {planVisible && <th className="px-4 py-2.5 text-right font-medium">Oran</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {bolgeler.map((b, i) => {
+            const oran = planVisible && b.plan && b.plan > 0 ? b.amount / b.plan : null;
+            return (
+              <tr
+                key={b.label}
+                onClick={() => onPick(b.label)}
+                className={`cursor-pointer transition hover:bg-mint/30 ${i % 2 === 1 ? "bg-cream/60" : ""}`}
+                title={`${b.label} illerini aç`}
+              >
+                <td className="px-3 py-2 text-center text-xs text-ink/50">{i + 1}</td>
+                <td className="px-4 py-2 font-medium text-primary-dark">{b.label}</td>
+                {planVisible && (
+                  <td className="px-4 py-2 text-center text-ink/80">
+                    {b.plan ? trMoney(b.plan) : "—"}
+                  </td>
+                )}
+                <td className="px-4 py-2 text-center font-semibold text-ink">
+                  {trMoney(b.amount)}
+                </td>
+                {planVisible && <td className="px-4 py-2 text-right">{oranHucre(oran)}</td>}
+              </tr>
+            );
+          })}
+          {digerler.map((d) => (
+            <tr key={d.label} className="text-ink/60">
+              <td className="px-3 py-2" />
+              <td className="px-4 py-2 text-xs font-medium uppercase">{d.label}</td>
+              {planVisible && <td className="px-4 py-2 text-center">—</td>}
+              <td className="px-4 py-2 text-center font-semibold">{trMoney(d.amount)}</td>
+              {planVisible && <td className="px-4 py-2 text-right text-ink/40">—</td>}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-primary/20 bg-mint/30 font-bold text-primary-dark">
+            <td className="px-3 py-2.5" />
+            <td className="px-4 py-2.5">Toplam</td>
+            {planVisible && <td className="px-4 py-2.5" />}
+            <td className="px-4 py-2.5 text-center">{trMoney(bolgeGelir + digerGelir)}</td>
+            {planVisible && <td className="px-4 py-2.5" />}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 // ---- kartlar ----
 
 function KpiCard({
@@ -883,6 +974,12 @@ export default function BagisDashboard({
     }
   };
   const planVisible = admin ? admin.planVisible : true;
+  const belirtilmemisGelir = admin
+    ? admin.digerler.reduce((s, d) => s + d.amount, 0)
+    : 0;
+  const belirtilmemisAdet = admin
+    ? admin.digerler.reduce((s, d) => s + d.count, 0)
+    : 0;
 
   const visUnits = admin && selBolge ? units.filter((u) => u.bolgeLabel === selBolge) : units;
   const selBolgeData = admin && selBolge ? admin.bolgeler.find((b) => b.label === selBolge) : null;
@@ -1028,9 +1125,9 @@ export default function BagisDashboard({
         <KpiCard
           icon={I.coins()}
           label="Toplam Gelir"
-          value={trMoney(gelir + (admin && !selBolge ? admin.belirtilmemisGelir : 0))}
+          value={trMoney(gelir + (admin && !selBolge ? belirtilmemisGelir : 0))}
           sub={
-            admin && !selBolge && admin.belirtilmemisGelir > 0 ? (
+            admin && !selBolge && belirtilmemisGelir > 0 ? (
               <span className="mt-1 block space-y-1">
                 <span className="flex items-center gap-1.5">
                   <span
@@ -1049,7 +1146,7 @@ export default function BagisDashboard({
                   />
                   <span className="text-ink/60">Belirtilmemiş:</span>
                   <strong className="text-xs" style={{ color: "#b99961" }}>
-                    {trMoney(admin.belirtilmemisGelir)}
+                    {trMoney(belirtilmemisGelir)}
                   </strong>
                 </span>
               </span>
@@ -1064,7 +1161,7 @@ export default function BagisDashboard({
         <KpiCard
           icon={I.hash()}
           label="Bağış Adedi"
-          value={String(adet + (admin && !selBolge ? admin.belirtilmemisAdet : 0))}
+          value={String(adet + (admin && !selBolge ? belirtilmemisAdet : 0))}
           sub={ayLabel}
           tone="deep"
         />
@@ -1135,11 +1232,29 @@ export default function BagisDashboard({
         )}
       </div>
 
-      {/* bölge kartları (yönetici, seçim yokken) */}
+      {/* bölge özet tablosu (yönetici, seçim yokken): tüm bölgeler tek listede */}
       {admin && !selBolge && (
         <section>
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="font-heading text-lg font-semibold text-ink">Bölge Özetleri</h2>
+            <p className="text-xs text-ink/50">{ayLabel} · satıra dokununca iller açılır</p>
+          </div>
+          <BolgeTable
+            bolgeler={admin.bolgeler}
+            digerler={admin.digerler}
+            planVisible={planVisible}
+            onPick={selectBolge}
+          />
+        </section>
+      )}
+
+      {/* bölge detay kartları (yönetici, seçim yokken) */}
+      {admin && !selBolge && (
+        <section>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="font-heading text-lg font-semibold text-ink">
+              Bölge Detay Kartları
+            </h2>
             <p className="text-xs text-ink/50">bölgeye dokununca iller açılır</p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">

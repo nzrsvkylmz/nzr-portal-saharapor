@@ -360,11 +360,16 @@ export default async function BagisPage({
 
   // ---- Yönetici dashboard'u: bölge kartları → il drill-down ----
   const numbered = bolgeRows.filter((r) => /^\d+\./.test(r.bolgeLabel));
-  // Birime/bölgeye eşlenmeyen bağışlar (BELİRTİLMEMİŞ vb.): portalda birim
-  // seçilmeden girilen kayıtlar. Yalnız genel toplam kartında gösterilir.
-  const unnumbered = bolgeRows.filter((r) => !/^\d+\./.test(r.bolgeLabel));
-  const birimsizGelir = unnumbered.reduce((s, r) => s + Number(r.totalAmount), 0);
-  const birimsizAdet = unnumbered.reduce((s, r) => s + r.donationCount, 0);
+  // Birime/bölgeye eşlenmeyen bağışlar (BELİRTİLMEMİŞ, Y.DIŞINDAN vb.):
+  // portalda birim seçilmeden girilen kayıtlar. Genel toplam kartında ve
+  // bölge özet tablosunun alt satırlarında etiketleriyle gösterilir.
+  const digerler = bolgeRows
+    .filter((r) => !/^\d+\./.test(r.bolgeLabel))
+    .map((r) => ({
+      label: r.bolgeLabel,
+      amount: Number(r.totalAmount),
+      count: r.donationCount,
+    }));
 
   // bölge bazlı aylık trend (depodaki tüm aylar) + bölge plan hedefleri
   const bolgeMonthRows = allAggRows.filter(
@@ -437,8 +442,7 @@ export default async function BagisPage({
         sartlar,
         sart,
         planVisible,
-        belirtilmemisGelir: birimsizGelir,
-        belirtilmemisAdet: birimsizAdet,
+        digerler,
       }}
     />
   );

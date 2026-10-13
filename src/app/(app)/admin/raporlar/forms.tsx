@@ -85,14 +85,17 @@ export function YardimForm() {
   return (
     <RaporTetikleyici kind="yardim" title="Yardım Raporu" buildBody={() => ({})}>
       <p className="text-sm text-ink/70">
-        Sosyal İnceleme ve Bölge Koordinatörü Kararı aşamalarındaki TÜM
-        bekleyen başvurular çekilir, birim listesi senkronlanır.
+        Sosyal İnceleme, Bölge Koordinatörü Kararı, Komisyon Karar Aşaması ve
+        Ödeme Süreci aşamalarındaki TÜM bekleyen başvurular çekilir, birim
+        listesi senkronlanır.
       </p>
       <p className="rounded-xl bg-mint/30 px-3 py-2 text-xs text-ink/70">
         Kritik eşik çekimi etkilemez; rapor ekranında istenen eşikle anlık
         hesaplanır.
       </p>
-      <p className="text-xs text-ink/50">Çekim ~25-60 sn sürer; sayfadan ayrılmayın.</p>
+      <p className="text-xs text-ink/50">
+        Dosya sayısı arttığı için çekim 1-3 dk sürebilir; sayfadan ayrılmayın.
+      </p>
     </RaporTetikleyici>
   );
 }

@@ -9,22 +9,52 @@
  * Tüm sayılar sunucuda hesaplanır; burada yalnız gösterim/gezinme var.
  */
 import { useEffect, useState } from "react";
-import type { YardimNode, YardimUnitRow } from "./YardimTable";
+import { YARDIM_STAGES } from "@/lib/domain/yardim-stages";
+
+/** Aşama başına adet + gün aralığı; anahtarlar YARDIM_STAGES'tendir. */
+export interface StageCell {
+  count: number;
+  range: string;
+}
+export type StageCells = Record<string, StageCell>;
+
+export interface YardimNode {
+  label: string; // yerleşim ya da mahalle adı
+  stages: StageCells;
+  toplam: number;
+  kritik: number;
+  children: YardimNode[];
+}
+
+export interface YardimUnitRow {
+  key: string;
+  bolge: string;
+  tems: string;
+  stages: StageCells;
+  toplam: number;
+  kritik: number;
+  portalAllUrl: string | null;
+  portalKritikUrl: string | null;
+  children: YardimNode[];
+  /** Saha dashboard'u için: en uzun bekleyen başvurular (gün + yer etiketi). */
+  topWaits?: { gun: number; yer: string }[];
+}
 
 export interface WaitBin {
   label: string; // '0–30'
-  si: number;
-  bk: number;
+  counts: Record<string, number>; // aşama anahtarı → adet
 }
 
 export interface YardimBolge {
   label: string; // '1.BÖLGE'
-  si: number;
-  bk: number;
+  stages: StageCells;
+  toplam: number;
   kritik: number;
-  siRange: string;
-  bkRange: string;
 }
+
+const cnt = (s: StageCells, key: string) => s[key]?.count ?? 0;
+const binToplam = (b: WaitBin) =>
+  Object.values(b.counts).reduce((s, v) => s + v, 0);
 
 // Tema-sadık vurgu paleti (kehribar yalnız kritik rozetlerde kullanılır)
 const ACCENTS = [
@@ -106,6 +136,20 @@ const I = {
       <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   ),
+  check: (c = "currentColor") => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+      <path d="m9 11 3 3L22 4" />
+    </svg>
+  ),
+  coins: (c = "currentColor") => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="6" />
+      <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+      <path d="M7 6h1v4" />
+      <path d="m16.71 13.88.7.71-2.82 2.82" />
+    </svg>
+  ),
   chevron: (open: boolean, c = "currentColor") => (
     <svg
       width="14"
@@ -123,60 +167,65 @@ const I = {
   ),
 };
 
+/** KPI kartı sunumu: aşama anahtarı → ikon/ton/alt metin. */
+const STAGE_KPI: Record<
+  string,
+  { icon: React.ReactNode; tone: "green" | "deep" | "gold" | "sage"; sub: string }
+> = {
+  si: { icon: I.doc(), tone: "deep", sub: "inceleme bekleyen dosya" },
+  bk: { icon: I.clock(), tone: "gold", sub: "koordinatör kararı bekleyen" },
+  kk: { icon: I.check(), tone: "sage", sub: "komisyon kararı bekleyen" },
+  od: { icon: I.coins(), tone: "green", sub: "ödeme sürecindeki dosya" },
+};
+
 // ---- grafikler ----
 
-/** SI/BK aşama dağılımı donut'u (SVG, bağımlılıksız). */
-function Donut({ si, bk }: { si: number; bk: number }) {
-  const total = si + bk;
+/** Aşama dağılımı donut'u (SVG, bağımlılıksız) — dilimler YARDIM_STAGES'ten. */
+function Donut({ counts }: { counts: Record<string, number> }) {
+  const parts = YARDIM_STAGES.map((s) => ({ ...s, value: counts[s.key] ?? 0 }));
+  const total = parts.reduce((s, p) => s + p.value, 0);
   const R = 54;
   const C = 2 * Math.PI * R;
-  const siFrac = total ? si / total : 0;
+  let offset = 0;
   return (
     <div className="flex items-center gap-5">
       <svg viewBox="0 0 140 140" className="h-32 w-32 shrink-0">
         <circle cx="70" cy="70" r={R} fill="none" stroke="#e7e2d7" strokeWidth="16" />
-        {total > 0 && (
-          <>
-            <circle
-              cx="70"
-              cy="70"
-              r={R}
-              fill="none"
-              stroke="#00764b"
-              strokeWidth="16"
-              strokeDasharray={`${siFrac * C} ${C}`}
-              strokeLinecap={siFrac > 0 && siFrac < 1 ? "round" : "butt"}
-              transform="rotate(-90 70 70)"
-            />
-            <circle
-              cx="70"
-              cy="70"
-              r={R}
-              fill="none"
-              stroke="#b99961"
-              strokeWidth="16"
-              strokeDasharray={`${(1 - siFrac) * C} ${C}`}
-              strokeLinecap={siFrac > 0 && siFrac < 1 ? "round" : "butt"}
-              transform={`rotate(${-90 + siFrac * 360} 70 70)`}
-            />
-          </>
-        )}
+        {total > 0 &&
+          parts
+            .filter((p) => p.value > 0)
+            .map((p) => {
+              const frac = p.value / total;
+              const el = (
+                <circle
+                  key={p.key}
+                  cx="70"
+                  cy="70"
+                  r={R}
+                  fill="none"
+                  stroke={p.color}
+                  strokeWidth="16"
+                  strokeDasharray={`${frac * C} ${C}`}
+                  transform={`rotate(${-90 + offset * 360} 70 70)`}
+                />
+              );
+              offset += frac;
+              return el;
+            })}
         <text x="70" y="66" textAnchor="middle" className="fill-primary-dark" fontSize="26" fontWeight="700">
           {total}
         </text>
         <text x="70" y="86" textAnchor="middle" fill="#2d3a35" opacity="0.55" fontSize="11">
-          bekleyen
+          dosya
         </text>
       </svg>
       <div className="space-y-2 text-sm">
-        <p className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#00764b" }} />
-          Sosyal İnceleme <strong>{si}</strong>
-        </p>
-        <p className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#b99961" }} />
-          Koordinatör Kararı <strong>{bk}</strong>
-        </p>
+        {parts.map((p) => (
+          <p key={p.key} className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />
+            {p.kisa} <strong>{p.value}</strong>
+          </p>
+        ))}
       </div>
     </div>
   );
@@ -184,12 +233,12 @@ function Donut({ si, bk }: { si: number; bk: number }) {
 
 /** Bekleme süresi dağılımı — dikey sütun grafiği. */
 function WaitChart({ bins, esik }: { bins: WaitBin[]; esik: number }) {
-  const max = Math.max(1, ...bins.map((b) => b.si + b.bk));
+  const max = Math.max(1, ...bins.map(binToplam));
   return (
     <div>
       <div className="flex h-36 items-end gap-3">
         {bins.map((b, i) => {
-          const toplam = b.si + b.bk;
+          const toplam = binToplam(b);
           const h = Math.round((toplam / max) * 100);
           const kritikBin = i === bins.length - 1;
           return (
@@ -273,12 +322,13 @@ function KpiCard({
   label: string;
   value: number;
   sub: string;
-  tone: "green" | "deep" | "gold" | "amber";
+  tone: "green" | "deep" | "gold" | "sage" | "amber";
 }) {
   const tones = {
     green: { chip: "#e2f3ea", icon: "#00764b", blob: "rgba(0,118,75,.08)" },
     deep: { chip: "#dcebe3", icon: "#004d32", blob: "rgba(0,77,50,.08)" },
     gold: { chip: "#f3ecdf", icon: "#b99961", blob: "rgba(185,153,97,.12)" },
+    sage: { chip: "#e4efeb", icon: "#3d7a68", blob: "rgba(61,122,104,.10)" },
     amber: { chip: "#faeedb", icon: "#e8a838", blob: "rgba(232,168,56,.14)" },
   }[tone];
   return (
@@ -304,10 +354,42 @@ function KpiCard({
   );
 }
 
+/** Aşama kırılımı: adetler + yığılmış renk çubuğu (kart içi ortak blok).
+ * Çubuk 4 aşamanın tamamını kapsar; 'bekleyen' toplamından bağımsızdır. */
+function StageBreakdown({ stages }: { stages: StageCells }) {
+  const toplam = YARDIM_STAGES.reduce((s, st) => s + cnt(stages, st.key), 0);
+  return (
+    <>
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-ink/70">
+        {YARDIM_STAGES.map((s) => (
+          <span key={s.key} className="flex items-center gap-1.5">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ background: s.color }}
+            />
+            {s.kisa} <strong className="text-ink">{cnt(stages, s.key)}</strong>
+          </span>
+        ))}
+      </div>
+      <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-cream">
+        {toplam > 0 &&
+          YARDIM_STAGES.map((s) => {
+            const v = cnt(stages, s.key);
+            return v > 0 ? (
+              <div
+                key={s.key}
+                className="h-full"
+                style={{ width: `${(v / toplam) * 100}%`, background: s.color }}
+              />
+            ) : null;
+          })}
+      </div>
+    </>
+  );
+}
+
 function BolgeCard({ b, onOpen }: { b: YardimBolge; onOpen: () => void }) {
   const a = kritikAccent(b.kritik);
-  const toplam = b.si + b.bk;
-  const siPct = toplam ? Math.round((b.si / toplam) * 100) : 0;
   return (
     <button
       onClick={onOpen}
@@ -333,22 +415,11 @@ function BolgeCard({ b, onOpen }: { b: YardimBolge; onOpen: () => void }) {
         </div>
         <p className="mt-3">
           <span className="text-3xl font-bold" style={{ color: a.main }}>
-            {toplam}
+            {b.toplam}
           </span>{" "}
           <span className="text-sm text-ink/60">bekleyen</span>
         </p>
-        <div className="mt-3 flex gap-4 text-xs text-ink/70">
-          <span>
-            Sosyal İnc. <strong className="text-ink">{b.si}</strong>
-          </span>
-          <span>
-            Koordinatör <strong className="text-ink">{b.bk}</strong>
-          </span>
-        </div>
-        <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-cream">
-          <div className="h-full" style={{ width: `${siPct}%`, background: a.grad }} />
-          <div className="h-full flex-1" style={{ background: "#e7dfcf" }} />
-        </div>
+        <StageBreakdown stages={b.stages} />
       </div>
       <div className="border-t border-cream px-4 py-2.5 text-xs font-semibold sm:px-5" style={{ color: a.main }}>
         Temsilcilikleri gör →
@@ -365,8 +436,6 @@ function UnitCard({
   onDetail: () => void;
 }) {
   const a = kritikAccent(u.kritik);
-  const toplam = u.siCount + u.bkCount;
-  const siPct = toplam ? Math.round((u.siCount / toplam) * 100) : 0;
   return (
     <div
       className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition hover:shadow-md"
@@ -397,27 +466,12 @@ function UnitCard({
 
         <p className="mt-3">
           <span className="text-3xl font-bold" style={{ color: a.main }}>
-            {toplam}
+            {u.toplam}
           </span>{" "}
           <span className="text-sm text-ink/60">bekleyen başvuru</span>
         </p>
 
-        <div className="mt-3 flex gap-4 text-xs text-ink/70">
-          <span>
-            Sosyal İnc. <strong className="text-ink">{u.siCount}</strong>
-          </span>
-          <span>
-            Koordinatör <strong className="text-ink">{u.bkCount}</strong>
-          </span>
-          {u.siRange !== "—" && (
-            <span className="ml-auto hidden text-ink/50 sm:inline">{u.siRange}</span>
-          )}
-        </div>
-
-        <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-cream">
-          <div className="h-full" style={{ width: `${siPct}%`, background: a.grad }} />
-          <div className="h-full flex-1" style={{ background: "#e7dfcf" }} />
-        </div>
+        <StageBreakdown stages={u.stages} />
       </button>
 
       <div className="flex items-center justify-between border-t border-cream px-4 py-2.5 sm:px-5">
@@ -447,7 +501,7 @@ function UnitCard({
 
 function NodeBlock({ node, depth, esik }: { node: YardimNode; depth: number; esik: number }) {
   const [open, setOpen] = useState(depth === 0);
-  const toplam = node.siCount + node.bkCount;
+  const toplam = node.toplam;
   const expandable = node.children.length > 0;
   return (
     <div className={depth > 0 ? "ml-4 border-l-2 border-mint pl-3" : ""}>
@@ -466,16 +520,14 @@ function NodeBlock({ node, depth, esik }: { node: YardimNode; depth: number; esi
           {toplam}
         </span>
       </button>
-      <div className="flex gap-3 pl-8 text-[11px] text-ink/50">
-        {node.siCount > 0 && (
-          <span>
-            Sİ {node.siCount} · {node.siRange}
-          </span>
-        )}
-        {node.bkCount > 0 && (
-          <span>
-            BK {node.bkCount} · {node.bkRange}
-          </span>
+      {/* yalnız bekleyen aşamalar: ödeme sürecindekiler kırılımda gösterilmez */}
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-8 text-[11px] text-ink/50">
+        {YARDIM_STAGES.filter((s) => s.bekleyen && cnt(node.stages, s.key) > 0).map(
+          (s) => (
+            <span key={s.key}>
+              {s.kisa} {cnt(node.stages, s.key)} · {node.stages[s.key].range}
+            </span>
+          ),
         )}
       </div>
       {open &&
@@ -506,7 +558,6 @@ function UnitModal({
       document.body.style.overflow = "";
     };
   }, [onClose]);
-  const toplam = u.siCount + u.bkCount;
   return (
     <div
       className="fixed inset-0 z-[60] flex items-stretch justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-6"
@@ -538,17 +589,17 @@ function UnitModal({
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-white/15 px-2 py-2">
-              <p className="text-xl font-bold">{toplam}</p>
+              <p className="text-xl font-bold">{u.toplam}</p>
               <p className="text-[10px] uppercase tracking-wide text-white/80">Bekleyen</p>
             </div>
-            <div className="rounded-xl bg-white/15 px-2 py-2">
-              <p className="text-xl font-bold">{u.siCount}</p>
-              <p className="text-[10px] uppercase tracking-wide text-white/80">Sosyal İnc.</p>
-            </div>
-            <div className="rounded-xl bg-white/15 px-2 py-2">
-              <p className="text-xl font-bold">{u.bkCount}</p>
-              <p className="text-[10px] uppercase tracking-wide text-white/80">Koordinatör</p>
-            </div>
+            {YARDIM_STAGES.map((s) => (
+              <div key={s.key} className="rounded-xl bg-white/15 px-2 py-2">
+                <p className="text-xl font-bold">{cnt(u.stages, s.key)}</p>
+                <p className="text-[10px] uppercase tracking-wide text-white/80">
+                  {s.kisa}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -678,14 +729,24 @@ export default function YardimDashboard({
   const admin = !!bolgeler;
 
   const visUnits = admin && selBolge ? units.filter((u) => u.bolge === selBolge) : units;
-  const si = visUnits.reduce((s, u) => s + u.siCount, 0);
-  const bk = visUnits.reduce((s, u) => s + u.bkCount, 0);
+  const stageCounts: Record<string, number> = Object.fromEntries(
+    YARDIM_STAGES.map((s) => [
+      s.key,
+      visUnits.reduce((sum, u) => sum + cnt(u.stages, s.key), 0),
+    ]),
+  );
+  const toplam = visUnits.reduce((s, u) => s + u.toplam, 0);
   const kritik = visUnits.reduce((s, u) => s + u.kritik, 0);
   const visBins = admin && selBolge ? (binsByBolge?.[selBolge] ?? bins) : bins;
 
   const detailIdx = detailKey ? visUnits.findIndex((u) => u.key === detailKey) : -1;
   const kartGorunumu = !admin || selBolge !== null;
   const cokBirim = visUnits.length > 1;
+
+  // Excel seçili bölgeyi de taşır (exportUrl her zaman ?esik=... içerir)
+  const exportHref = selBolge
+    ? `${exportUrl}&bolge=${encodeURIComponent(selBolge)}`
+    : exportUrl;
 
   return (
     <div className="space-y-6">
@@ -722,7 +783,7 @@ export default function YardimDashboard({
             </button>
           </form>
           <a
-            href={exportUrl}
+            href={exportHref}
             className="flex items-center gap-1.5 rounded-xl border border-primary px-3 py-1.5 text-sm text-primary transition hover:bg-primary hover:text-white"
           >
             {I.doc()} Excel
@@ -740,29 +801,28 @@ export default function YardimDashboard({
         </button>
       )}
 
-      {/* KPI kartları */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      {/* KPI kartları: toplam + aşama başına bir kart + kritik */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           icon={I.users()}
           label="Toplam Bekleyen"
-          value={si + bk}
+          value={toplam}
           sub={admin ? (selBolge ?? "tüm bölgeler") : "sorumluluk alanınızda"}
           tone="green"
         />
-        <KpiCard
-          icon={I.doc()}
-          label="Sosyal İnceleme"
-          value={si}
-          sub="inceleme bekleyen dosya"
-          tone="deep"
-        />
-        <KpiCard
-          icon={I.clock()}
-          label="Koordinatör Kararı"
-          value={bk}
-          sub="karar aşamasındaki dosya"
-          tone="gold"
-        />
+        {YARDIM_STAGES.map((s) => {
+          const k = STAGE_KPI[s.key];
+          return (
+            <KpiCard
+              key={s.key}
+              icon={k.icon}
+              label={s.label}
+              value={stageCounts[s.key]}
+              sub={k.sub}
+              tone={k.tone}
+            />
+          );
+        })}
         <KpiCard
           icon={I.alert()}
           label={`Kritik (>${esik} gün)`}
@@ -784,7 +844,7 @@ export default function YardimDashboard({
               <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
                 Aşama Dağılımı
               </h3>
-              <Donut si={si} bk={bk} />
+              <Donut counts={stageCounts} />
             </div>
             <div className="rounded-2xl bg-white p-5 shadow-sm">
               <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
@@ -800,7 +860,7 @@ export default function YardimDashboard({
                 <RankBars
                   rows={bolgeler!.map((b) => ({
                     label: b.label,
-                    toplam: b.si + b.bk,
+                    toplam: b.toplam,
                     kritik: b.kritik,
                   }))}
                   onPick={(l) => selectBolge(l)}
@@ -815,7 +875,7 @@ export default function YardimDashboard({
                   <RankBars
                     rows={visUnits.map((u) => ({
                       label: u.tems,
-                      toplam: u.siCount + u.bkCount,
+                      toplam: u.toplam,
                       kritik: u.kritik,
                     }))}
                   />

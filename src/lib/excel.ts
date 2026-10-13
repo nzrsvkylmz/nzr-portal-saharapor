@@ -3,6 +3,7 @@
  * krem şeritli satırlar, kritik değerlerde kehribar.
  */
 import ExcelJS from "exceljs";
+import { YARDIM_STAGES } from "@/lib/domain/yardim-stages";
 
 const GREEN = "FF00764B"; // Nezir Yeşili
 const AMBER = "FFB95C00"; // kritik metin (kehribar koyusu — okunabilirlik)
@@ -93,10 +94,8 @@ export async function buildBagisXlsx(
 export interface YardimExcelRow {
   bolge: string;
   birim: string | null;
-  siAdet: number;
-  siAralik: string;
-  bkAdet: number;
-  bkAralik: string;
+  /** YARDIM_STAGES sırasıyla aşama başına adet + gün aralığı. */
+  stages: { adet: number; aralik: string }[];
   kritik: number;
 }
 
@@ -106,18 +105,18 @@ export async function buildYardimXlsx(
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Yardım Raporu");
+  // gün aralığı yalnız bekleyen aşamalarda; Ödeme Süreci tek sütun (adet)
+  const colCount =
+    3 + YARDIM_STAGES.reduce((s, st) => s + (st.bekleyen ? 2 : 1), 0);
   ws.addRow([title]);
-  ws.mergeCells(1, 1, 1, 7);
+  ws.mergeCells(1, 1, 1, colCount);
   ws.getCell(1, 1).font = { bold: true, size: 13, color: { argb: GREEN } };
 
   styleHeader(
     ws.addRow([
       "Bölge",
       "Birim",
-      "Sosyal İnceleme",
-      "Gün Aralığı",
-      "Koordinatör Kararı",
-      "Gün Aralığı",
+      ...YARDIM_STAGES.flatMap((s) => (s.bekleyen ? [s.label, "Gün Aralığı"] : [s.label])),
       "Kritik",
     ]),
   );
@@ -127,10 +126,9 @@ export async function buildYardimXlsx(
     const row = ws.addRow([
       r.bolge,
       bolgeSatiri ? "BÖLGE TOPLAMI" : r.birim,
-      r.siAdet,
-      r.siAralik,
-      r.bkAdet,
-      r.bkAralik,
+      ...r.stages.flatMap((s, i) =>
+        YARDIM_STAGES[i].bekleyen ? [s.adet, s.aralik] : [s.adet],
+      ),
       r.kritik,
     ]);
     if (bolgeSatiri) {
@@ -141,7 +139,7 @@ export async function buildYardimXlsx(
       });
     }
     if (r.kritik > 0) {
-      row.getCell(7).font = {
+      row.getCell(colCount).font = {
         bold: true,
         color: { argb: AMBER },
       };
@@ -150,7 +148,7 @@ export async function buildYardimXlsx(
 
   ws.getColumn(1).width = 14;
   ws.getColumn(2).width = 30;
-  [3, 4, 5, 6, 7].forEach((c) => (ws.getColumn(c).width = 16));
+  for (let c = 3; c <= colCount; c++) ws.getColumn(c).width = 16;
   ws.views = [{ state: "frozen", ySplit: 2 }];
 
   return Buffer.from(await wb.xlsx.writeBuffer());

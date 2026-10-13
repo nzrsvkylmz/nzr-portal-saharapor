@@ -20,6 +20,7 @@ import {
   sartList,
 } from "@/lib/domain/bagis-view";
 import { trDateToMonth } from "@/lib/domain/normalize";
+import { KRITIK_STAGE_KEYS, STAGE_KEYS } from "@/lib/domain/yardim-stages";
 import {
   buildBagisXlsx,
   buildYardimXlsx,
@@ -46,6 +47,8 @@ export async function GET(
   }
   const scope = await visibleScope(user, kind === "bagis" ? "bagis" : "yardim");
   const esik = Math.min(365, Math.max(1, Number(req.nextUrl.searchParams.get("esik")) || 60));
+  // dashboard'daki bölge seçimi (drill-down) exporta da uygulanır
+  const bolgeParam = (req.nextUrl.searchParams.get("bolge") ?? "").trim();
 
   if (kind === "bagis") {
     const run = await db.query.reportRuns.findFirst({
@@ -76,7 +79,10 @@ export async function GET(
     let sart = sartlar.includes(sartParam) ? sartParam : null;
     // saha rolleri yalnız Genel Bağış indirir (sayfadaki kuralla aynı)
     if (!scope.all && sartlar.includes("Genel Bağış")) sart = "Genel Bağış";
-    const aggRows = rowsForSart(monthRows, sart);
+    const sartRows = rowsForSart(monthRows, sart);
+    const aggRows = bolgeParam
+      ? sartRows.filter((r) => r.bolgeLabel === bolgeParam)
+      : sartRows;
     const planMonths = monthsInRange(ayA, ayB);
     const planRows = planMonths.length
       ? await db.select().from(plans).where(inArray(plans.month, planMonths))
@@ -183,6 +189,7 @@ export async function GET(
         if (plan <= 0 || groupMap.has(`u${unitId}`)) continue;
         const u = unitById.get(unitId);
         if (!u || !u.active || topOf(unitId)?.id !== unitId) continue;
+        if (bolgeParam && u.bolgeLabel !== bolgeParam) continue;
         const visible = scope.all
           ? true
           : user.role === "BOLGE_MUDURU"
@@ -267,7 +274,7 @@ export async function GET(
     }
 
     const buf = await buildBagisXlsx(
-      `Bağış Raporu — ${sart ? `${sart} — ` : ""}${aylar.length ? ayLabel : `${p.dateA} – ${p.dateB}`}`,
+      `Bağış Raporu — ${bolgeParam ? `${bolgeParam} — ` : ""}${sart ? `${sart} — ` : ""}${aylar.length ? ayLabel : `${p.dateA} – ${p.dateB}`}`,
       rows,
       includePlan,
     );
@@ -292,6 +299,7 @@ export async function GET(
       .where(eq(yardimAggregates.runId, run.id));
 
     const visible = aggRows.filter((r) => {
+      if (bolgeParam && r.bolgeLabel !== bolgeParam) return false; // bölge seçimi
       if (r.scope === "unmatched") return scope.all;
       if (r.scope === "bolge") return scope.all;
       if (scope.all) return true;
@@ -301,12 +309,13 @@ export async function GET(
       );
     });
 
-    // bölge|birim → si/bk birleşimi
+    // bölge|birim → aşama bazlı gün birleşimi
     const merged = new Map<
       string,
-      { bolge: string; birim: string | null; si: number[]; bk: number[] }
+      { bolge: string; birim: string | null; days: Map<string, number[]> }
     >();
     for (const r of visible) {
+      if (!STAGE_KEYS.includes(r.stageKey)) continue; // bilinmeyen/eski aşama
       const key =
         r.scope === "bolge"
           ? `B|${r.bolgeLabel}`
@@ -314,12 +323,10 @@ export async function GET(
       const cur = merged.get(key) ?? {
         bolge: r.bolgeLabel ?? "EŞLENMEYEN",
         birim: r.scope === "bolge" ? null : (r.unitLabel ?? null),
-        si: [],
-        bk: [],
+        days: new Map<string, number[]>(),
       };
       const days = (r.days as number[]) ?? [];
-      if (r.stageKey === "si") cur.si.push(...days);
-      else cur.bk.push(...days);
+      cur.days.set(r.stageKey, [...(cur.days.get(r.stageKey) ?? []), ...days]);
       merged.set(key, cur);
     }
 
@@ -341,15 +348,18 @@ export async function GET(
       .map((m) => ({
         bolge: m.bolge,
         birim: m.birim,
-        siAdet: m.si.length,
-        siAralik: aralik(m.si),
-        bkAdet: m.bk.length,
-        bkAralik: aralik(m.bk),
-        kritik: [...m.si, ...m.bk].filter((d) => d > esik).length,
+        stages: STAGE_KEYS.map((k) => {
+          const d = m.days.get(k) ?? [];
+          return { adet: d.length, aralik: aralik(d) };
+        }),
+        // kritik yalnız Sİ+BK günlerinden hesaplanır (rapor sayfasıyla aynı kural)
+        kritik: KRITIK_STAGE_KEYS.flatMap((k) => m.days.get(k) ?? []).filter(
+          (d) => d > esik,
+        ).length,
       }));
 
     const buf = await buildYardimXlsx(
-      `Yardım Raporu — kritik eşik ${esik} gün — ${new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeZone: "Europe/Istanbul" }).format(run.finishedAt ?? new Date())}`,
+      `Yardım Raporu — ${bolgeParam ? `${bolgeParam} — ` : ""}kritik eşik ${esik} gün — ${new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeZone: "Europe/Istanbul" }).format(run.finishedAt ?? new Date())}`,
       rows,
     );
     return new NextResponse(new Uint8Array(buf), {

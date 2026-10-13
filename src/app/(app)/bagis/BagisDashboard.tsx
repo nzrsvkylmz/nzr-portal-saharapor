@@ -1034,6 +1034,11 @@ export default function BagisDashboard({
   const siraliUnits = [...visUnits].sort((a, b) => b.amount - a.amount);
   const kartGorunumu = !admin || selBolge !== null;
 
+  // Excel seçili bölgeyi de taşır (exportUrl her zaman ?ayA=... içerir)
+  const exportHref = selBolge
+    ? `${exportUrl}&bolge=${encodeURIComponent(selBolge)}`
+    : exportUrl;
+
   // şart seçici linkleri (yönetici): ay aralığını VE bölge seçimini koruyarak GET
   const sartHref = (s: string | null) => {
     const qs = new URLSearchParams({ ayA, ayB });
@@ -1079,7 +1084,7 @@ export default function BagisDashboard({
             </button>
           </form>
           <a
-            href={exportUrl}
+            href={exportHref}
             className="flex items-center gap-1.5 rounded-xl border border-primary px-3 py-1.5 text-sm text-primary transition hover:bg-primary hover:text-white"
           >
             {I.doc()} Excel

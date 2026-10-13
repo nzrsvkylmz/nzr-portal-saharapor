@@ -14,23 +14,30 @@ import {
   type UnitMaps,
   type UnitTriple,
 } from "@/lib/domain/matching";
+import { YARDIM_STAGES } from "@/lib/domain/yardim-stages";
 import type { NezirClient } from "./client";
 import { parseExportXml } from "./spreadsheetml";
 import { RemoteError } from "./errors";
 
-/** Aşama tanımı — app_settings.'yardim.flows' ile genişletilebilir. */
+/** Aşama tanımı — varsayılanı YARDIM_STAGES kayıt defterinden gelir. */
 export interface StageDef {
-  key: string; // 'si', 'bk'
+  key: string; // 'si', 'bk', 'kk', 'od'
   label: string; // export 'Aşama' sütunundaki tam metin
 }
 
-export const DEFAULT_STAGES: StageDef[] = [
-  { key: "si", label: "Sosyal İnceleme" },
-  { key: "bk", label: "Bölge Koordinatörü Kararı" },
-];
+export const DEFAULT_STAGES: StageDef[] = YARDIM_STAGES.map(({ key, label }) => ({
+  key,
+  label,
+}));
 
-/** 23,179 = Sosyal İnceleme + Bölge Koordinatörü Kararı (portal flow id'leri). */
-export const DEFAULT_FLOW = "23,179";
+/** Tüm hedef aşamaların flow filtresi: '23,179,25,188'. */
+export const DEFAULT_FLOW = YARDIM_STAGES.map((s) => s.flowId).join(",");
+
+/** Kritik dosya bağlantıları için flow filtresi: yalnız kritik eşiğe giren
+ * aşamalar (Sİ+BK → '23,179'). */
+export const KRITIK_FLOW = YARDIM_STAGES.filter((s) => s.kritik)
+  .map((s) => s.flowId)
+  .join(",");
 
 export const EXPORT_TIMEOUT_MS = 180_000;
 

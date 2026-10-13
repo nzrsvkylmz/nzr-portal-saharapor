@@ -6,9 +6,20 @@ import { reportRuns, units, yardimAggregates } from "@/lib/db/schema";
 import { visibleScope } from "@/lib/domain/scope";
 import { toTrDate } from "@/lib/domain/normalize";
 import { BASE_URL } from "@/lib/portal/client";
-import { DEFAULT_FLOW, portalLink } from "@/lib/portal/relief";
-import type { YardimNode, YardimUnitRow } from "./YardimTable";
-import YardimDashboard, { type WaitBin, type YardimBolge } from "./YardimDashboard";
+import { DEFAULT_FLOW, KRITIK_FLOW, portalLink } from "@/lib/portal/relief";
+import {
+  BEKLEYEN_STAGE_KEYS,
+  KRITIK_STAGE_KEYS,
+  STAGE_KEYS,
+  stageByKey,
+} from "@/lib/domain/yardim-stages";
+import YardimDashboard, {
+  type StageCells,
+  type WaitBin,
+  type YardimBolge,
+  type YardimNode,
+  type YardimUnitRow,
+} from "./YardimDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +44,8 @@ function normDistricts(d: DistrictDays | undefined): Record<string, MahalleDays>
 interface RowData {
   label: string;
   unitId: number | null;
-  si?: StageData;
-  bk?: StageData;
-  siDistricts?: DistrictDays;
-  bkDistricts?: DistrictDays;
+  stages: Map<string, StageData>; // aşama anahtarı → günler/adet
+  districts: Map<string, Record<string, MahalleDays>>; // aşama → yerleşim → mahalle
 }
 
 function range(days: number[]): string {
@@ -48,10 +57,27 @@ function range(days: number[]): string {
   return min === max ? `${min} gün` : `${min}–${max} gün`;
 }
 
+// kritik eşik yalnız sahanın aksiyon alabildiği aşamalarda (Sİ+BK) hesaplanır
+const kritikDays = (row: RowData) =>
+  KRITIK_STAGE_KEYS.flatMap((k) => row.stages.get(k)?.days ?? []);
+
 function kritikAdet(row: RowData, esik: number): number {
-  const all = [...(row.si?.days ?? []), ...(row.bk?.days ?? [])];
-  return all.filter((d) => d > esik).length;
+  return kritikDays(row).filter((d) => d > esik).length;
 }
+
+/** Satırın aşama hücreleri: tüm aşamalar için adet + gün aralığı (0 dahil). */
+function stageCells(row: RowData): StageCells {
+  return Object.fromEntries(
+    STAGE_KEYS.map((k) => {
+      const s = row.stages.get(k);
+      return [k, { count: s?.count ?? 0, range: range(s?.days ?? []) }];
+    }),
+  );
+}
+
+// 'bekleyen' toplamı: Ödeme Sürecindekiler hariç (ödemesi başlayan dosyalar)
+const toplamOf = (row: RowData) =>
+  BEKLEYEN_STAGE_KEYS.reduce((s, k) => s + (row.stages.get(k)?.count ?? 0), 0);
 
 function fmtTime(d: Date | null): string {
   if (!d) return "—";
@@ -99,24 +125,26 @@ export default async function YardimPage({
   const allUnits = await db.select().from(units);
   const depIdByUnitId = new Map(allUnits.map((u) => [u.id, u.depId]));
 
-  // satırları bölge/birim bazında si+bk olarak birleştir
+  // satırları bölge/birim bazında aşama haritasına birleştir
   function collect(
     rows: typeof aggRows,
     keyOf: (r: (typeof aggRows)[number]) => string,
   ): Map<string, RowData> {
     const out = new Map<string, RowData>();
     for (const r of rows) {
+      if (!STAGE_KEYS.includes(r.stageKey)) continue; // bilinmeyen/eski aşama
       const key = keyOf(r);
-      const cur = out.get(key) ?? { label: key, unitId: r.unitId ?? null };
-      const data: StageData = { days: (r.days as number[]) ?? [], count: r.count };
-      const districts = (r.districts as DistrictDays | null) ?? undefined;
-      if (r.stageKey === "si") {
-        cur.si = data;
-        cur.siDistricts = districts;
-      } else if (r.stageKey === "bk") {
-        cur.bk = data;
-        cur.bkDistricts = districts;
-      }
+      const cur: RowData = out.get(key) ?? {
+        label: key,
+        unitId: r.unitId ?? null,
+        stages: new Map(),
+        districts: new Map(),
+      };
+      cur.stages.set(r.stageKey, { days: (r.days as number[]) ?? [], count: r.count });
+      cur.districts.set(
+        r.stageKey,
+        normDistricts((r.districts as DistrictDays | null) ?? undefined),
+      );
       if (r.unitId) cur.unitId = r.unitId;
       out.set(key, cur);
     }
@@ -153,34 +181,40 @@ export default async function YardimPage({
   // sayılar burada hesaplanır, client bileşeni yalnız aç/kapa yapar.
   const makeNode = (
     label: string,
-    si: number[],
-    bk: number[],
+    daysByStage: Map<string, number[]>,
     children: YardimNode[] = [],
-  ): YardimNode => ({
-    label,
-    siCount: si.length,
-    siRange: range(si),
-    bkCount: bk.length,
-    bkRange: range(bk),
-    kritik: [...si, ...bk].filter((d) => d > esik).length,
-    children,
-  });
-  const byTotalDesc = (a: YardimNode, z: YardimNode) =>
-    z.siCount + z.bkCount - (a.siCount + a.bkCount);
+  ): YardimNode => {
+    const bekleyenGunler = BEKLEYEN_STAGE_KEYS.flatMap((k) => daysByStage.get(k) ?? []);
+    const kritikGunler = KRITIK_STAGE_KEYS.flatMap((k) => daysByStage.get(k) ?? []);
+    return {
+      label,
+      stages: Object.fromEntries(
+        STAGE_KEYS.map((k) => {
+          const d = daysByStage.get(k) ?? [];
+          return [k, { count: d.length, range: range(d) }];
+        }),
+      ),
+      toplam: bekleyenGunler.length,
+      kritik: kritikGunler.filter((d) => d > esik).length,
+      children,
+    };
+  };
+  const byTotalDesc = (a: YardimNode, z: YardimNode) => z.toplam - a.toplam;
 
   const detayRows: YardimUnitRow[] = birimler.map((b) => {
     const [bolge, tems] = b.label.split("|");
     const depId = b.unitId ? depIdByUnitId.get(b.unitId) : undefined;
-    const siD = normDistricts(b.siDistricts);
-    const bkD = normDistricts(b.bkDistricts);
-    const yerlesimler = new Set([...Object.keys(siD), ...Object.keys(bkD)]);
+    // bekleyen aşama → yerleşim → mahalle → günler: ilçe/mahalle kırılımı ve
+    // en uzun bekleyenler ödeme sürecindeki dosyaları hiç içermez
+    const dMaps = BEKLEYEN_STAGE_KEYS.map(
+      (k) => [k, b.districts.get(k) ?? {}] as const,
+    );
+    const yerlesimler = new Set(dMaps.flatMap(([, d]) => Object.keys(d)));
     let children = [...yerlesimler]
       .map((y) => {
-        const siMah = siD[y] ?? {};
-        const bkMah = bkD[y] ?? {};
-        const mahalleler = new Set([...Object.keys(siMah), ...Object.keys(bkMah)]);
+        const mahalleler = new Set(dMaps.flatMap(([, d]) => Object.keys(d[y] ?? {})));
         let mahRows = [...mahalleler]
-          .map((m) => makeNode(m, siMah[m] ?? [], bkMah[m] ?? []))
+          .map((m) => makeNode(m, new Map(dMaps.map(([k, d]) => [k, d[y]?.[m] ?? []]))))
           .sort(byTotalDesc);
         // mahalle bilgisi hiç yoksa alt düzey gösterilmez
         if (mahRows.length === 1 && mahRows[0].label === "Belirtilmemiş") {
@@ -188,8 +222,7 @@ export default async function YardimPage({
         }
         return makeNode(
           y,
-          Object.values(siMah).flat(),
-          Object.values(bkMah).flat(),
+          new Map(dMaps.map(([k, d]) => [k, Object.values(d[y] ?? {}).flat()])),
           mahRows,
         );
       })
@@ -204,7 +237,7 @@ export default async function YardimPage({
     }
     // en uzun bekleyenler: yerleşim/mahalle etiketiyle ilk 5 (saha dashboard'u)
     const waits: { gun: number; yer: string }[] = [];
-    for (const d of [siD, bkD]) {
+    for (const [, d] of dMaps) {
       for (const [y, mahMap] of Object.entries(d)) {
         for (const [m, days] of Object.entries(mahMap)) {
           const ayni = y.toLocaleLowerCase("tr") === (tems ?? "").toLocaleLowerCase("tr");
@@ -220,14 +253,12 @@ export default async function YardimPage({
       key: b.label,
       bolge: bolge ?? "",
       tems: tems ?? "",
-      siCount: b.si?.count ?? 0,
-      siRange: range(b.si?.days ?? []),
-      bkCount: b.bk?.count ?? 0,
-      bkRange: range(b.bk?.days ?? []),
+      stages: stageCells(b),
+      toplam: toplamOf(b),
       kritik: kritikAdet(b, esik),
       portalAllUrl: depId ? portalLink(BASE_URL, DEFAULT_FLOW, depId) : null,
       portalKritikUrl: depId
-        ? portalLink(BASE_URL, DEFAULT_FLOW, depId, esikTarihi)
+        ? portalLink(BASE_URL, KRITIK_FLOW, depId, esikTarihi)
         : null,
       children,
     };
@@ -241,22 +272,26 @@ export default async function YardimPage({
     { label: `${b2 + 1}–${esik}`, min: b2 + 1, max: esik },
     { label: `${esik}+`, min: esik + 1, max: Infinity },
   ];
-  const yeniBins = (): WaitBin[] => binDefs.map((d) => ({ label: d.label, si: 0, bk: 0 }));
+  // dağılım yalnız bekleyen aşamaları (Sİ+BK+Komisyon) kapsar; ödeme
+  // sürecindeki dosyalar bekleme süresine dahil edilmez
+  const yeniBins = (): WaitBin[] =>
+    binDefs.map((d) => ({
+      label: d.label,
+      counts: Object.fromEntries(BEKLEYEN_STAGE_KEYS.map((k) => [k, 0])),
+    }));
   const bins = yeniBins();
   const binsByBolge: Record<string, WaitBin[]> = {};
   for (const b of birimler) {
     const bolgeKey = b.label.split("|")[0] ?? "?";
     const bolgeBins = scope.all ? (binsByBolge[bolgeKey] ??= yeniBins()) : null;
-    for (const [stage, days] of [
-      ["si", b.si?.days ?? []],
-      ["bk", b.bk?.days ?? []],
-    ] as const) {
-      for (const gun of days) {
+    for (const [stage, data] of b.stages) {
+      if (!BEKLEYEN_STAGE_KEYS.includes(stage)) continue;
+      for (const gun of data.days) {
         if (gun < 0) continue;
         const i = binDefs.findIndex((d) => gun >= d.min && gun <= d.max);
         if (i !== -1) {
-          bins[i][stage] += 1;
-          if (bolgeBins) bolgeBins[i][stage] += 1;
+          bins[i].counts[stage] += 1;
+          if (bolgeBins) bolgeBins[i].counts[stage] += 1;
         }
       }
     }
@@ -286,11 +321,9 @@ export default async function YardimPage({
   // Yönetici dashboard'u: bölge kartları → temsilcilik drill-down → modal.
   const adminBolgeler: YardimBolge[] = bolgeler.map((b) => ({
     label: b.label,
-    si: b.si?.count ?? 0,
-    bk: b.bk?.count ?? 0,
+    stages: stageCells(b),
+    toplam: toplamOf(b),
     kritik: kritikAdet(b, esik),
-    siRange: range(b.si?.days ?? []),
-    bkRange: range(b.bk?.days ?? []),
   }));
 
   return (
@@ -319,7 +352,7 @@ export default async function YardimPage({
                 <li key={r.id} className="flex justify-between">
                   <span>{r.unitLabel}</span>
                   <span className="text-ink/60">
-                    {r.count} başvuru ({r.stageKey === "si" ? "Sosyal İnceleme" : "Koordinatör"})
+                    {r.count} başvuru ({stageByKey.get(r.stageKey)?.kisa ?? r.stageKey})
                   </span>
                 </li>
               ))}

@@ -183,7 +183,7 @@ export const yardimAggregates = pgTable(
     bolgeLabel: text("bolge_label"),
     unitId: integer("unit_id").references(() => units.id),
     unitLabel: text("unit_label"),
-    stageKey: text("stage_key").notNull(), // 'si' | 'bk' — genişleyebilir
+    stageKey: text("stage_key").notNull(), // YARDIM_STAGES anahtarı: 'si'|'bk'|'kk'|'od'
     days: jsonb("days").notNull(), // bekleyen gün listesi [120,3,45,...]
     count: integer("count").notNull(),
     // unit satırlarında ilçe (Yerleşim) → mahalle kırılımı:

@@ -62,8 +62,8 @@ describe("fetchPending (yardım başvuru özeti)", () => {
     const bugun = new Date(2026, 9, 7); // 07.10.2026
     const { kayitlar, okunan } = await fetchPending(fakeClient(exportXml), maps, bugun);
     expect(okunan).toBe(3);
-    // 'Ödeme Süreci' hedef aşamalarda değil → süzülür
-    expect(kayitlar).toHaveLength(2);
+    // Sİ + BK + Ödeme Süreci: üçü de hedef aşama
+    expect(kayitlar).toHaveLength(3);
     expect(kayitlar[0]).toEqual({
       bolge: "1.BÖLGE",
       tems: "Malatya",
@@ -80,6 +80,15 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       gun: 6,
       yerlesim: "Esenyurt",
       mahalle: "Belirtilmemiş",
+    });
+    // Ödeme Süreci kaydı: birim listesinde olmayan şehir → EŞLENMEYEN
+    expect(kayitlar[2]).toEqual({
+      bolge: "EŞLENMEYEN",
+      tems: "Ankara",
+      stageKey: "od",
+      gun: 2,
+      yerlesim: "Çankaya",
+      mahalle: "Mutlukent Mah.",
     });
   });
 });

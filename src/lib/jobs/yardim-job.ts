@@ -18,8 +18,8 @@ import { buildMaps, UNMATCHED, type UnitTriple } from "@/lib/domain/matching";
 import { norm } from "@/lib/domain/normalize";
 
 export interface YardimParams {
-  flow?: string; // varsayılan '23,179'
-  stages?: StageDef[]; // varsayılan si+bk
+  flow?: string; // varsayılan '23,179,25,188'
+  stages?: StageDef[]; // varsayılan YARDIM_STAGES (si+bk+kk+od)
 }
 
 type Progress = (pct: number, msg: string) => Promise<void>;

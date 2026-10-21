@@ -909,7 +909,7 @@ function UnitModal({
                         <span className="shrink-0 text-[11px] text-ink/55">
                           il içi pay %{(pay * 100).toFixed(1).replace(".", ",")} ·{" "}
                           {c.count} adet
-                          {cOran !== null ? ` · hedef ${pct(cOran)}` : ""}
+                          {cOran !== null ? ` · gerçekleşme ${pct(cOran)}` : ""}
                         </span>
                       </div>
                     </li>
@@ -1173,7 +1173,7 @@ export default function BagisDashboard({
         {planVisible && (
           <KpiCard
             icon={I.target()}
-            label={admin && !selBolge ? "Plan Hedefi (Bölgeler)" : "Plan Hedefi"}
+            label={admin && !selBolge ? "Planlama (Bölgeler)" : "Planlama"}
             value={plan > 0 ? trMoney(plan) : "—"}
             sub={ayLabel}
             tone="gold"
@@ -1227,7 +1227,7 @@ export default function BagisDashboard({
         {planVisible && (goalRows.length > 1 || (admin && !selBolge)) && (
           <div className="rounded-2xl bg-white p-5 shadow-sm">
             <h3 className="mb-4 font-heading text-sm font-semibold text-ink/80">
-              Hedef Gerçekleşme Sıralaması
+              Planlama Gerçekleşme Sıralaması
             </h3>
             <GoalBars
               rows={goalRows}

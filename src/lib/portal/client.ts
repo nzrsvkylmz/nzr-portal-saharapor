@@ -271,12 +271,15 @@ export class NezirClient {
     if (data?.action === "alert") {
       throw new RemoteError("Nezir Sistem: " + String(data.data ?? "Doğrulama reddedildi."));
     }
-    if (data?.action === "redirectlocation" && data.data) {
+    if (
+      (data?.action === "redirectlocation" || data?.action === "redirect") &&
+      data.data
+    ) {
       const target = String(data.data);
       if (target.toLowerCase().includes("/verify")) {
         throw new RemoteError("Doğrulama kodu kabul edilmedi.");
       }
-      await this.request("GET", target);
+      await this.request("GET", target, { follow: true });
     }
     if ((await this.detectState()) !== "authenticated") {
       throw new RemoteError(

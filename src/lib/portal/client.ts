@@ -49,8 +49,11 @@ function looksLikePasswordRenew(pageLow: string): boolean {
 }
 
 export class NezirClient {
-  // Oturum yoklaması: sorgu çalıştırmayan hafif filtre paneli.
-  static PROBE_PATH = "/crea/relief/application/filter/index";
+  // Oturum yoklaması: modül yetkisinden bağımsız, her kullanıcının
+  // erişebildiği ana sayfa. (Önceki yoklama yardım modülünün filtre
+  // paneliydi; o modüle yetkisi olmayan kullanıcılar — ör. muhasebe —
+  // girişte "unknown" durumuna düşüp oturum açamıyordu.)
+  static PROBE_PATH = "/crea";
 
   // Veri istekleri YALNIZCA bu modül sayfalarına atılabilir.
   static ALLOWED_READ_PATHS = [
@@ -300,6 +303,9 @@ export class NezirClient {
       const loc = (r.headers.get("location") ?? "").toLowerCase();
       if (loc.includes("/verify")) return "verify";
       if (loc.includes("/login")) return "login";
+      // Oturum canlı ama sayfa başka bir portal sayfasına yönlendirdi
+      // (ör. modül yetkisi yok); bunu oturumsuzluk sayma.
+      if (loc) return "authenticated";
     }
     if (r.status === 200) {
       const low = r.text.toLowerCase();

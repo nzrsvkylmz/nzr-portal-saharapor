@@ -48,6 +48,17 @@ function looksLikePasswordRenew(pageLow: string): boolean {
   );
 }
 
+// Saha kullanıcısına gösterilecek genel erişilemezlik mesajı; teknik ayrıntı
+// sonuna eklenir ki loglardan kök neden izlenebilsin.
+const UNREACHABLE_MSG =
+  "Nezir Sistem'e şu an ulaşılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.";
+
+const RETRY_DELAYS_MS = [500, 1500];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export class NezirClient {
   // Oturum yoklaması: modül yetkisinden bağımsız, her kullanıcının
   // erişebildiği ana sayfa. (Önceki yoklama yardım modülünün filtre
@@ -132,25 +143,37 @@ export class NezirClient {
   ): Promise<PortalResponse> {
     if (!path.startsWith("/")) throw new RemoteError("Geçersiz uzak sistem yolu.");
 
-    let resp: PortalResponse;
-    try {
-      resp = await this.rawFetch(method, this.baseUrl + path, opts);
-      // follow=true: cookie'leri her atlamada işleyerek yönlendirmeleri elle izle
-      let hops = 0;
-      while (opts.follow && resp.status >= 300 && resp.status < 400 && hops < 5) {
-        const loc = resp.headers.get("location");
-        if (!loc) break;
-        const nextUrl = new URL(loc, this.baseUrl).toString();
-        resp = await this.rawFetch("GET", nextUrl, { timeoutMs: opts.timeoutMs });
-        hops += 1;
+    // Geçici ağ hataları (bağlantı kopması, zaman aşımı, DNS) yalnızca GET
+    // isteklerinde otomatik yeniden denenir. POST /login tekrarı portalda
+    // mükerrer OTP tetikleyebileceğinden POST'lar denemesiz kalır.
+    const maxAttempts = method === "GET" ? RETRY_DELAYS_MS.length + 1 : 1;
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) await sleep(RETRY_DELAYS_MS[attempt - 1]);
+      try {
+        let resp = await this.rawFetch(method, this.baseUrl + path, opts);
+        // follow=true: cookie'leri her atlamada işleyerek yönlendirmeleri elle izle
+        let hops = 0;
+        while (opts.follow && resp.status >= 300 && resp.status < 400 && hops < 5) {
+          const loc = resp.headers.get("location");
+          if (!loc) break;
+          const nextUrl = new URL(loc, this.baseUrl).toString();
+          resp = await this.rawFetch("GET", nextUrl, { timeoutMs: opts.timeoutMs });
+          hops += 1;
+        }
+        return resp;
+      } catch (err) {
+        if (err instanceof RemoteError) throw err;
+        lastErr = err;
       }
-    } catch (err) {
-      if (err instanceof RemoteError) throw err;
-      throw new RemoteError(
-        "Nezir Sistem'e ulaşılamadı: " + (err instanceof Error ? err.message : String(err)),
-      );
     }
-    return resp;
+    throw new RemoteError(
+      UNREACHABLE_MSG +
+        " (teknik ayrıntı: " +
+        (lastErr instanceof Error ? lastErr.message : String(lastErr)) +
+        ")",
+    );
   }
 
   // ---- login / OTP akışı ----

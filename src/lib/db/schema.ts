@@ -191,6 +191,10 @@ export const yardimAggregates = pgTable(
     // olmadan {"Siverek": [120,3]} yazıldı; okuma iki biçimi de destekler.
     // Kişisel veri içermez; eski snapshot'larda NULL.
     districts: jsonb("districts"),
+    // unit satırlarında portalda temsilciliğe atanmamış (Sorumlu Birim boş/
+    // özel birim/BM) olup il-ilçeden bu birime sayılan kayıtlar:
+    // [{"t":"19.10.2026","y":"Seyhan","m":"Barış Mah."}] — kişisel veri içermez.
+    atanmamis: jsonb("atanmamis"),
   },
   (t) => [index("yardim_agg_run_scope").on(t.runId, t.scope)],
 );

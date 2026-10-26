@@ -1,0 +1,1 @@
+ALTER TABLE "yardim_aggregates" ADD COLUMN "atanmamis" jsonb;

@@ -6,7 +6,12 @@ import { reportRuns, units, yardimAggregates } from "@/lib/db/schema";
 import { visibleScope } from "@/lib/domain/scope";
 import { toTrDate } from "@/lib/domain/normalize";
 import { BASE_URL } from "@/lib/portal/client";
-import { DEFAULT_FLOW, KRITIK_FLOW, portalLink } from "@/lib/portal/relief";
+import {
+  DEFAULT_FLOW,
+  KRITIK_FLOW,
+  portalLink,
+  portalTarihLink,
+} from "@/lib/portal/relief";
 import {
   BEKLEYEN_STAGE_KEYS,
   KRITIK_STAGE_KEYS,
@@ -14,6 +19,7 @@ import {
   stageByKey,
 } from "@/lib/domain/yardim-stages";
 import YardimDashboard, {
+  type AtanmamisRow,
   type StageCells,
   type WaitBin,
   type YardimBolge,
@@ -41,11 +47,15 @@ function normDistricts(d: DistrictDays | undefined): Record<string, MahalleDays>
   return out;
 }
 
+// portalda temsilciliğe atanmamış kayıt: tarih + yerleşim + mahalle
+type AtanmamisItem = { t: string; y: string; m: string };
+
 interface RowData {
   label: string;
   unitId: number | null;
   stages: Map<string, StageData>; // aşama anahtarı → günler/adet
   districts: Map<string, Record<string, MahalleDays>>; // aşama → yerleşim → mahalle
+  atanmamis: Map<string, AtanmamisItem[]>; // aşama → atanmamış kayıtlar
 }
 
 function range(days: number[]): string {
@@ -139,12 +149,14 @@ export default async function YardimPage({
         unitId: r.unitId ?? null,
         stages: new Map(),
         districts: new Map(),
+        atanmamis: new Map(),
       };
       cur.stages.set(r.stageKey, { days: (r.days as number[]) ?? [], count: r.count });
       cur.districts.set(
         r.stageKey,
         normDistricts((r.districts as DistrictDays | null) ?? undefined),
       );
+      cur.atanmamis.set(r.stageKey, (r.atanmamis as AtanmamisItem[] | null) ?? []);
       if (r.unitId) cur.unitId = r.unitId;
       out.set(key, cur);
     }
@@ -248,8 +260,24 @@ export default async function YardimPage({
       }
     }
     const topWaits = waits.sort((a, z) => z.gun - a.gun).slice(0, 5);
+    // portalda temsilciliğe atanmamış kayıtlar: ayıklama listesi + tarihli
+    // kısa-liste linki (portalda il-ilçe filtresi olmadığından tek yol bu)
+    const trDateKey = (t: string) => t.split(".").reverse().join("");
+    const atanmamis: AtanmamisRow[] = STAGE_KEYS.flatMap((k) => {
+      const stage = stageByKey.get(k);
+      return (b.atanmamis.get(k) ?? []).map((it) => ({
+        asama: stage?.kisa ?? k,
+        tarih: it.t,
+        yer:
+          it.m && it.m !== "Belirtilmemiş"
+            ? `${it.y} · ${it.m}`
+            : it.y,
+        url: stage ? portalTarihLink(BASE_URL, stage.flowId, it.t) : null,
+      }));
+    }).sort((a, z) => trDateKey(a.tarih).localeCompare(trDateKey(z.tarih)));
     return {
       topWaits,
+      atanmamis,
       key: b.label,
       bolge: bolge ?? "",
       tems: tems ?? "",

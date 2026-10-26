@@ -26,6 +26,14 @@ export interface YardimNode {
   children: YardimNode[];
 }
 
+/** Portalda temsilciliğe atanmamış kayıt: tarihli kısa-liste linkiyle ayıklanır. */
+export interface AtanmamisRow {
+  asama: string; // aşama kısa adı
+  tarih: string; // başvuru tarihi DD.MM.YYYY
+  yer: string; // 'Seyhan · Barış Mah.'
+  url: string | null; // portalda aynı tarih+aşama kısa listesi
+}
+
 export interface YardimUnitRow {
   key: string;
   bolge: string;
@@ -38,6 +46,8 @@ export interface YardimUnitRow {
   children: YardimNode[];
   /** Saha dashboard'u için: en uzun bekleyen başvurular (gün + yer etiketi). */
   topWaits?: { gun: number; yer: string }[];
+  /** Portalda Sorumlu Birim'i boş/özel olup il-ilçeden bu birime sayılanlar. */
+  atanmamis: AtanmamisRow[];
 }
 
 export interface WaitBin {
@@ -472,6 +482,14 @@ function UnitCard({
         </p>
 
         <StageBreakdown stages={u.stages} />
+
+        {u.atanmamis.length > 0 && (
+          <p className="mt-2.5 flex items-center gap-1.5 text-[11px] text-ink/60">
+            <span className="text-amber">{I.alert()}</span>
+            <strong>{u.atanmamis.length}</strong> dosya portalda birime atanmamış —
+            detayda listelenir
+          </p>
+        )}
       </button>
 
       <div className="flex items-center justify-between border-t border-cream px-4 py-2.5 sm:px-5">
@@ -651,6 +669,48 @@ function UnitModal({
                   <NodeBlock key={c.label} node={c} depth={0} esik={esik} />
                 ))}
               </div>
+            </section>
+          )}
+
+          {u.atanmamis.length > 0 && (
+            <section>
+              <h4 className="mb-2 flex items-center gap-2 font-heading text-sm font-semibold text-ink/80">
+                <span className="text-amber">{I.alert()}</span> Portalda birime
+                atanmamış ({u.atanmamis.length})
+              </h4>
+              <p className="mb-2 text-xs leading-relaxed text-ink/55">
+                Bu başvuruların portalda Sorumlu Birim alanı boş (ya da özel bir
+                birimde); ihtiyaç sahibinin il-ilçe bilgisinden bu temsilciliğe
+                sayıldılar ve
+                birimin portal filtresinde <em>görünmezler</em>. &quot;Bul&quot;
+                bağlantısı aynı tarihte açılmış aynı aşamadaki başvuruların kısa
+                listesini açar. Yakında doğrudan başvuruyu açmanızı sağlayacak
+                geliştirme yapılacak.
+              </p>
+              <ul className="space-y-1.5">
+                {u.atanmamis.map((r, i) => (
+                  <li
+                    key={`${r.tarih}-${r.yer}-${i}`}
+                    className="flex items-center gap-2 rounded-xl bg-cream/70 px-3 py-2 text-sm"
+                  >
+                    <span className="shrink-0 rounded-full bg-mint px-2 py-0.5 text-[11px] font-semibold text-primary-dark">
+                      {r.asama}
+                    </span>
+                    <span className="shrink-0 text-xs text-ink/60">{r.tarih}</span>
+                    <span className="min-w-0 flex-1 truncate text-ink/80">{r.yer}</span>
+                    {r.url && (
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                      >
+                        Bul {I.external()}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 

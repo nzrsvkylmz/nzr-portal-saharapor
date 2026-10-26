@@ -7,7 +7,7 @@
  * bölge/temsilcilik bazlı TOPLAM sayılar ve gün listeleri yazılır.
  */
 import * as cheerio from "cheerio";
-import { daysBetween, norm, parseTrDate } from "@/lib/domain/normalize";
+import { daysBetween, norm, parseTrDate, toTrDate } from "@/lib/domain/normalize";
 import {
   eslestir,
   eslestirSorumluBirim,
@@ -81,6 +81,10 @@ export interface PendingRecord {
   gun: number;
   yerlesim: string; // ilçe kırılımı için ham Yerleşim etiketi (kişisel veri değil)
   mahalle: string; // mahalle alt kırılımı; sütun yoksa/boşsa 'Belirtilmemiş'
+  /** Portalda temsilciliğe atanmamış (Sorumlu Birim boş/özel/BM) olup
+   * il-ilçeden atandı — birimin portal linkinde (department=) görünmez. */
+  atanmamis: boolean;
+  tarih: string; // başvuru tarihi 'DD.MM.YYYY' — portalda bulma filtresi için
 }
 
 /**
@@ -157,9 +161,22 @@ export async function fetchPending(
       gun,
       yerlesim: yerlesimRaw || "Belirtilmemiş",
       mahalle: mahalleRaw || "Belirtilmemiş",
+      // doğrudan temsilcilik ataması kullanılamadıysa kayıt "atanmamış"
+      atanmamis: !(sorumlu && !sorumlu.isBM),
+      tarih: tarih ? toTrDate(tarih) : "",
     });
   }
   return { kayitlar, okunan: data.length };
+}
+
+/**
+ * Portalda "tarihli kısa liste" bağlantısı: aynı tarihte açılmış, aynı
+ * aşamadaki başvurular (record== filtresi, birimden bağımsız). Portalda
+ * il-ilçe filtresi olmadığından, temsilciliğe atanmamış kayıtlar bu kısa
+ * listeden (genelde birkaç kayıt) mahalle bilgisiyle ayıklanır.
+ */
+export function portalTarihLink(baseUrl: string, flowId: number, tarih: string): string {
+  return `${baseUrl}/crea/relief/application/?flow=${flowId}&record=&record_a=${tarih}`;
 }
 
 /** Portala derin bağlantı: birim + (opsiyonel) kritik tarih filtresi. */

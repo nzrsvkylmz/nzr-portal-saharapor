@@ -8,14 +8,22 @@ const xml = readFileSync(path.join(__dirname, "fixtures", "export-sample.xml"), 
 describe("SpreadsheetML parser", () => {
   it("satırları ve hücreleri çıkarır, ilk satır başlıktır", () => {
     const rows = rowsOf(xml);
-    expect(rows).toHaveLength(4);
-    expect(rows[0]).toEqual(["Başvuru", "Şehir", "Yerleşim", "Mahalle", "Aşama"]);
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toEqual([
+      "Başvuru",
+      "Şehir",
+      "Yerleşim",
+      "Mahalle",
+      "Aşama",
+      "Sorumlu Birim",
+    ]);
     expect(rows[1]).toEqual([
       "07.07.2026",
       "Malatya",
       "Battalgazi",
       "Hidayet Mah.",
       "Sosyal İnceleme",
+      "Elazığ",
     ]);
   });
 
@@ -25,6 +33,6 @@ describe("SpreadsheetML parser", () => {
 
   it("BOM ve boşluk önekini tolere eder", () => {
     const rows = parseExportXml("﻿\r\n " + xml);
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(5);
   });
 });

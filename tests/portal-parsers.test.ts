@@ -61,18 +61,20 @@ describe("fetchPending (yardım başvuru özeti)", () => {
     const maps = buildMaps(units);
     const bugun = new Date(2026, 9, 7); // 07.10.2026
     const { kayitlar, okunan } = await fetchPending(fakeClient(exportXml), maps, bugun);
-    expect(okunan).toBe(3);
-    // Sİ + BK + Ödeme Süreci: üçü de hedef aşama
-    expect(kayitlar).toHaveLength(3);
+    expect(okunan).toBe(4);
+    expect(kayitlar).toHaveLength(4);
+    // Sorumlu Birim dolu (Elazığ): şehir Malatya olsa da birim kazanır
     expect(kayitlar[0]).toEqual({
       bolge: "1.BÖLGE",
-      tems: "Malatya",
+      tems: "Elazığ",
       stageKey: "si",
       gun: 92,
       yerlesim: "Battalgazi",
       mahalle: "Hidayet Mah.",
+      atanmamis: false,
+      tarih: "07.07.2026",
     });
-    // Mahalle hücresi boş → 'Belirtilmemiş'
+    // Sorumlu Birim boş → il-ilçe ayrıştırması; Mahalle boş → 'Belirtilmemiş'
     expect(kayitlar[1]).toEqual({
       bolge: "18.BÖLGE",
       tems: "Esenyurt",
@@ -80,8 +82,10 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       gun: 6,
       yerlesim: "Esenyurt",
       mahalle: "Belirtilmemiş",
+      atanmamis: true,
+      tarih: "01.10.2026",
     });
-    // Ödeme Süreci kaydı: birim listesinde olmayan şehir → EŞLENMEYEN
+    // Özel birim (Sosyal Yardımlar) → il-ilçe; listede olmayan şehir → EŞLENMEYEN
     expect(kayitlar[2]).toEqual({
       bolge: "EŞLENMEYEN",
       tems: "Ankara",
@@ -89,6 +93,19 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       gun: 2,
       yerlesim: "Çankaya",
       mahalle: "Mutlukent Mah.",
+      atanmamis: true,
+      tarih: "05.10.2026",
+    });
+    // BM seçili → il-ilçe tercih edilir (Malatya); temsilciliğe atanmamış sayılır
+    expect(kayitlar[3]).toEqual({
+      bolge: "1.BÖLGE",
+      tems: "Malatya",
+      stageKey: "kk",
+      gun: 7,
+      yerlesim: "Yeşilyurt",
+      mahalle: "İnönü Mah.",
+      atanmamis: true,
+      tarih: "30.09.2026",
     });
   });
 });

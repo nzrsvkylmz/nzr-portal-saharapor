@@ -130,9 +130,14 @@ export async function runYardimJob(
   await progress(80, "Özet hesaplanıyor ve kaydediliyor…");
 
   // bölge → stage → günler ve birim → stage → günler +
-  // ilçe(Yerleşim) → mahalle kırılımı
+  // ilçe(Yerleşim) → mahalle kırılımı + portalda atanmamış kayıt listesi
   const bolgeAgg = new Map<string, Map<string, number[]>>();
-  type StageAcc = { days: number[]; districts: Map<string, Map<string, number[]>> };
+  type AtanmamisItem = { t: string; y: string; m: string };
+  type StageAcc = {
+    days: number[];
+    districts: Map<string, Map<string, number[]>>;
+    atanmamis: AtanmamisItem[];
+  };
   const unitAgg = new Map<string, Map<string, StageAcc>>(); // key: `${bolge}|${tems}`
   for (const k of kayitlar) {
     const b = bolgeAgg.get(k.bolge) ?? new Map<string, number[]>();
@@ -140,11 +145,18 @@ export async function runYardimJob(
     bolgeAgg.set(k.bolge, b);
     const key = `${k.bolge}|${k.tems}`;
     const u = unitAgg.get(key) ?? new Map<string, StageAcc>();
-    const acc: StageAcc = u.get(k.stageKey) ?? { days: [], districts: new Map() };
+    const acc: StageAcc = u.get(k.stageKey) ?? {
+      days: [],
+      districts: new Map(),
+      atanmamis: [],
+    };
     acc.days.push(k.gun);
     const mah = acc.districts.get(k.yerlesim) ?? new Map<string, number[]>();
     mah.set(k.mahalle, [...(mah.get(k.mahalle) ?? []), k.gun]);
     acc.districts.set(k.yerlesim, mah);
+    if (k.atanmamis && k.tarih) {
+      acc.atanmamis.push({ t: k.tarih, y: k.yerlesim, m: k.mahalle });
+    }
     u.set(k.stageKey, acc);
     unitAgg.set(key, u);
   }
@@ -188,6 +200,7 @@ export async function runYardimJob(
           : Object.fromEntries(
               [...acc.districts].map(([y, m]) => [y, Object.fromEntries(m)]),
             ),
+        atanmamis: unmatched || acc.atanmamis.length === 0 ? null : acc.atanmamis,
       });
     }
   }

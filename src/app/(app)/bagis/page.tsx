@@ -85,12 +85,12 @@ export default async function BagisPage({
   const ayLabel = ayA === ayB ? `${ayA} ayı` : `${ayA} – ${ayB}`;
   const monthRows = rowsForMonthRange(allAggRows, ayA, ayB);
 
-  // bağış şartı (faaliyet) filtresi: Tümü | Genel Bağış | Sadaka | …
-  // Saha rolleri (temsilci/bölge müdürü) yalnız Genel Bağış görür; şart
-  // seçimi ve diğer şartların verisi admin'e özeldir.
+  // bağış şartı (faaliyet) filtresi: Tümü | Genel Bağış | Sadaka | Zekat | …
+  // Saha rolleri (temsilci/bölge müdürü) de şart seçebilir; varsayılanları
+  // Genel Bağış'tır (plan kıyası oradadır) ve "Tümü" seçenekleri yoktur.
   const sartlar = sartList(allAggRows);
   let sart = sartlar.includes(sp.sart ?? "") ? (sp.sart as string) : null;
-  if (!scope.all && sartlar.includes("Genel Bağış")) sart = "Genel Bağış";
+  if (!scope.all && !sart && sartlar.includes("Genel Bağış")) sart = "Genel Bağış";
   const aggRows = rowsForSart(monthRows, sart);
   // plan hedefleri Genel Bağış içindir; diğer görünümlerde oran yanıltıcı olur.
   // (eski, şart kırılımı olmayan snapshot'larda önceki davranış korunur)
@@ -354,6 +354,7 @@ export default async function BagisPage({
         exportUrl={exportUrl}
         units={dashUnits}
         monthly={monthly}
+        saha={{ sartlar, sart, planVisible }}
       />
     );
   }

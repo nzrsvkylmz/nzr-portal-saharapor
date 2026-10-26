@@ -941,6 +941,7 @@ export default function BagisDashboard({
   units,
   monthly,
   admin,
+  saha,
   initialBolge,
 }: {
   headerLabel: string;
@@ -953,6 +954,9 @@ export default function BagisDashboard({
   monthly: MonthPoint[];
   /** Yönetici modu: bölge özetleri + şart seçimi (drill-down ile illere inilir). */
   admin?: BagisAdminProps;
+  /** Saha modu şart seçimi: "Tümü" seçeneği olmadan şart pill'leri; plan
+   * yalnız Genel Bağış görünümünde gösterilir. */
+  saha?: { sartlar: string[]; sart: string | null; planVisible: boolean };
   /** URL'den gelen bölge seçimi (şart/ay değişiminde seçim korunur). */
   initialBolge?: string | null;
 }) {
@@ -973,7 +977,8 @@ export default function BagisDashboard({
       window.history.replaceState(null, "", url);
     }
   };
-  const planVisible = admin ? admin.planVisible : true;
+  const planVisible = admin ? admin.planVisible : (saha?.planVisible ?? true);
+  const curSart = admin ? admin.sart : (saha?.sart ?? null);
   const belirtilmemisGelir = admin
     ? admin.digerler.reduce((s, d) => s + d.amount, 0)
     : 0;
@@ -1056,7 +1061,11 @@ export default function BagisDashboard({
             {admin && selBolge ? `${selBolge} · Bölge Detayı` : headerLabel}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-primary-dark sm:text-3xl">
-            {admin ? (admin.sart ?? "Bağış Raporu") : "Genel Bağış Raporu"}
+            {admin
+              ? (admin.sart ?? "Bağış Raporu")
+              : curSart
+                ? `${curSart} Raporu`
+                : "Bağış Raporu"}
           </h1>
           <p className="mt-1 text-sm text-ink/60">
             {ayLabel} · {updatedAt} tarihinde güncellendi
@@ -1064,7 +1073,7 @@ export default function BagisDashboard({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <form method="GET" className="flex flex-wrap items-center gap-2 text-sm">
-            {admin?.sart && <input type="hidden" name="sart" value={admin.sart} />}
+            {curSart && <input type="hidden" name="sart" value={curSart} />}
             {selBolge && <input type="hidden" name="bolge" value={selBolge} readOnly />}
             <input
               name="ayA"
@@ -1092,11 +1101,11 @@ export default function BagisDashboard({
         </div>
       </div>
 
-      {/* şart seçimi (yönetici) */}
-      {admin && admin.sartlar.length > 0 && (
+      {/* şart seçimi: yöneticide "Tümü" + şartlar, sahada yalnız şartlar */}
+      {(admin ? admin.sartlar.length > 0 : (saha?.sartlar.length ?? 0) > 1) && (
         <div className="flex flex-wrap gap-2 text-sm">
-          {[null, ...admin.sartlar].map((s) => {
-            const seçili = s === admin.sart;
+          {(admin ? [null, ...admin.sartlar] : saha!.sartlar).map((s: string | null) => {
+            const seçili = s === curSart;
             return (
               <a
                 key={s ?? "tumu"}

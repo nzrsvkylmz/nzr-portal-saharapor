@@ -23,7 +23,7 @@ export function BagisForm({
         return {
           ayA: fd.get("ayA"),
           ayB: fd.get("ayB"),
-          activity: fd.getAll("activity").join(",") || "1,15",
+          activity: fd.getAll("activity").join(",") || "1,15,25",
           pool: fd.get("pool") || "1",
         };
       }}
@@ -59,7 +59,7 @@ export function BagisForm({
                 type="checkbox"
                 name="activity"
                 value={v}
-                defaultChecked={["1", "15"].includes(v)}
+                defaultChecked={["1", "15", "25"].includes(v)}
                 className="accent-primary"
               />
               {t}
@@ -76,6 +76,11 @@ export function BagisForm({
         aylar son halleriyle kalır. Günlük kullanım: yalnız içinde bulunulan
         ay. Portalda geçmişe dönük düzeltme yapıldıysa o ayı da kapsayacak
         şekilde seçin (ör. Eylül–Ekim).
+      </p>
+      <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800">
+        ⚠ Dikkat: ay yenilenirken o ayın TÜM faaliyet satırları silinip yalnız
+        seçili faaliyetler yazılır — Genel Bağış, Sadaka ve Zekat&apos;ı
+        birlikte seçili tutun.
       </p>
     </RaporTetikleyici>
   );

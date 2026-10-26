@@ -77,8 +77,9 @@ export async function GET(
     const sartlar = sartList(allAggRows);
     const sartParam = req.nextUrl.searchParams.get("sart") ?? "";
     let sart = sartlar.includes(sartParam) ? sartParam : null;
-    // saha rolleri yalnız Genel Bağış indirir (sayfadaki kuralla aynı)
-    if (!scope.all && sartlar.includes("Genel Bağış")) sart = "Genel Bağış";
+    // saha rollerinin varsayılanı Genel Bağış; seçtikleri şartı indirebilirler
+    // ("Tümü" yok — sayfadaki kuralla aynı)
+    if (!scope.all && !sart && sartlar.includes("Genel Bağış")) sart = "Genel Bağış";
     const sartRows = rowsForSart(monthRows, sart);
     const aggRows = bolgeParam
       ? sartRows.filter((r) => r.bolgeLabel === bolgeParam)

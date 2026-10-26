@@ -22,6 +22,7 @@ function fmtTime(d: Date | null): string {
 const ALLOWED_ACTIVITIES: Array<[string, string]> = [
   ["1", "Genel Bağış"],
   ["15", "Sadaka"],
+  ["25", "Zekat"],
 ];
 const ALLOWED_POOLS: Array<[string, string]> = [["1", "Serbest"]];
 

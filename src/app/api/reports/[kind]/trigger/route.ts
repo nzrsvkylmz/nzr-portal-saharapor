@@ -76,12 +76,12 @@ export async function POST(
         );
       }
     }
-    // Varsayılan: Genel Bağış (1) + Sadaka (15), Serbest fon (1)
+    // Varsayılan: Genel Bağış (1) + Sadaka (15) + Zekat (25), Serbest fon (1)
     jobParams = {
       dateA,
       dateB,
       types: String(body.types ?? "1,2,3,4,5").replace(/[^\d,]/g, "") || "1,2,3,4,5",
-      activity: String(body.activity ?? "1,15"),
+      activity: String(body.activity ?? "1,15,25"),
       pool: String(body.pool ?? "1"),
     };
   } else {

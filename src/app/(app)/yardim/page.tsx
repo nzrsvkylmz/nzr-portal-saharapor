@@ -189,6 +189,14 @@ export default async function YardimPage({
 
   const esikTarihi = toTrDate(new Date(Date.now() - esik * 86400_000));
 
+  // "Bekleyen dosyalar" portal filtresi role göre: temsilci yalnız kendi
+  // aksiyonundaki Sosyal İnceleme'yi, bölge müdürü ve yöneticiler Sİ+BK'yi
+  // görür. Komisyon/Ödeme'dekiler "Tüm dosyalar" linkinde kalır.
+  const bekleyenFlow =
+    user.role === "TEMSILCI"
+      ? String(stageByKey.get("si")!.flowId)
+      : KRITIK_FLOW;
+
   // Temsilcilik Detayı satırları + ilçe (Yerleşim) → mahalle kırılımı — tüm
   // sayılar burada hesaplanır, client bileşeni yalnız aç/kapa yapar.
   const makeNode = (
@@ -285,6 +293,7 @@ export default async function YardimPage({
       toplam: toplamOf(b),
       kritik: kritikAdet(b, esik),
       portalAllUrl: depId ? portalLink(BASE_URL, DEFAULT_FLOW, depId) : null,
+      portalBekleyenUrl: depId ? portalLink(BASE_URL, bekleyenFlow, depId) : null,
       portalKritikUrl: depId
         ? portalLink(BASE_URL, KRITIK_FLOW, depId, esikTarihi)
         : null,

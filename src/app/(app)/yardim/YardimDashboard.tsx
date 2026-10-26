@@ -42,6 +42,8 @@ export interface YardimUnitRow {
   toplam: number;
   kritik: number;
   portalAllUrl: string | null;
+  /** Rol bazlı bekleyen dosyalar: temsilci Sİ, bölge müdürü/yönetici Sİ+BK. */
+  portalBekleyenUrl: string | null;
   portalKritikUrl: string | null;
   children: YardimNode[];
   /** Saha dashboard'u için: en uzun bekleyen başvurular (gün + yer etiketi). */
@@ -725,15 +727,25 @@ function UnitModal({
                 Kritik dosyalar {I.external("white")}
               </a>
             )}
-            {u.portalAllUrl && (
+            {u.portalBekleyenUrl && (
               <a
-                href={u.portalAllUrl}
+                href={u.portalBekleyenUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
                 style={{ background: accent.grad }}
               >
-                Portalda aç {I.external("white")}
+                Bekleyen dosyalar {I.external("white")}
+              </a>
+            )}
+            {u.portalAllUrl && (
+              <a
+                href={u.portalAllUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 rounded-xl border border-primary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white"
+              >
+                Tüm dosyalar {I.external()}
               </a>
             )}
           </div>

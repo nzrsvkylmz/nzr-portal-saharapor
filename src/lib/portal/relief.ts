@@ -2,15 +2,17 @@
  * Yardım modülü veri katmanı — relief_data.py portu.
  *
  * Gizlilik ilkesi: HİÇBİR kişisel veri okunmaz/saklanmaz. Başvuru exportundan
- * yalnızca Başvuru tarihi, Şehir, Yerleşim ve Aşama sütunları kullanılır;
- * satırlar bellekte işlenir, DB'ye sadece bölge/temsilcilik bazlı TOPLAM
- * sayılar ve gün listeleri yazılır.
+ * yalnızca Başvuru tarihi, Şehir, Yerleşim, Mahalle, Sorumlu Birim ve Aşama
+ * sütunları kullanılır; satırlar bellekte işlenir, DB'ye sadece
+ * bölge/temsilcilik bazlı TOPLAM sayılar ve gün listeleri yazılır.
  */
 import * as cheerio from "cheerio";
-import { daysBetween, parseTrDate } from "@/lib/domain/normalize";
+import { daysBetween, norm, parseTrDate } from "@/lib/domain/normalize";
 import {
   eslestir,
+  eslestirSorumluBirim,
   isExcludedUnit,
+  UNMATCHED,
   type UnitMaps,
   type UnitTriple,
 } from "@/lib/domain/matching";
@@ -107,6 +109,8 @@ export async function fetchPending(
   const iYer = h.indexOf("Yerleşim");
   const iAsm = h.indexOf("Aşama");
   const iMah = h.indexOf("Mahalle"); // opsiyonel: eski exportlarda olmayabilir
+  // opsiyonel: Sorumlu Birim sütunu (Sistem Plus 10.2026'da ekledi)
+  const iSor = h.findIndex((c) => norm(c) === "sorumlu birim");
   if (iT === -1 || iSeh === -1 || iYer === -1 || iAsm === -1) {
     throw new RemoteError(`Başvuru export sütunları beklenenden farklı: ${h.join(", ")}`);
   }
@@ -120,11 +124,30 @@ export async function fetchPending(
     const tarih = parseTrDate(iT < r.length ? r[iT] : "");
     const gun = tarih ? daysBetween(bugun, tarih) : -1;
     const yerlesimRaw = (iYer < r.length ? r[iYer] : "").replace(/\s+/g, " ").trim();
-    const [bolge, tems] = eslestir(
-      maps,
-      iSeh < r.length ? r[iSeh] : "",
-      yerlesimRaw,
-    );
+    const sehirRaw = iSeh < r.length ? r[iSeh] : "";
+    const sorumluRaw =
+      iSor !== -1 && iSor < r.length ? r[iSor].replace(/\s+/g, " ").trim() : "";
+    // Öncelik: Sorumlu Birim sütunu (sayım ve portal linki aynı kaynağa dayanır).
+    // Boş / özel birim (Sosyal Yardımlar vb.) / tanınmayan metin → il-ilçe
+    // ayrıştırması. Bölge müdürlüğü seçiliyse il-ilçe daha spesifik olduğundan
+    // önce o denenir, çözülemezse kayıt BM'nin bölgesinde BM adıyla kalır.
+    const sorumlu = eslestirSorumluBirim(maps, sorumluRaw);
+    let bolge: string;
+    let tems: string;
+    if (sorumlu && !sorumlu.isBM) {
+      bolge = sorumlu.bolge;
+      tems = sorumlu.unit;
+    } else {
+      [bolge, tems] = eslestir(maps, sehirRaw, yerlesimRaw);
+      if (bolge === UNMATCHED) {
+        if (sorumlu) {
+          bolge = sorumlu.bolge;
+          tems = sorumlu.unit;
+        } else if (sorumluRaw && !isExcludedUnit(sorumluRaw)) {
+          tems = sorumluRaw; // eşlenmeyenler listesinde ham sorumlu birim görünsün
+        }
+      }
+    }
     const mahalleRaw =
       iMah !== -1 && iMah < r.length ? r[iMah].replace(/\s+/g, " ").trim() : "";
     kayitlar.push({

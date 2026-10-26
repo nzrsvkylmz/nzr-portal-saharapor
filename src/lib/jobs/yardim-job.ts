@@ -5,7 +5,7 @@
  */
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { units, yardimAggregates } from "@/lib/db/schema";
+import { unitAliases, units, yardimAggregates } from "@/lib/db/schema";
 import { loadClient, saveClient } from "@/lib/portal/cookiejar";
 import {
   DEFAULT_FLOW,
@@ -14,7 +14,12 @@ import {
   fetchUnitList,
   type StageDef,
 } from "@/lib/portal/relief";
-import { buildMaps, UNMATCHED, type UnitTriple } from "@/lib/domain/matching";
+import {
+  buildMaps,
+  isExcludedUnit,
+  UNMATCHED,
+  type UnitTriple,
+} from "@/lib/domain/matching";
 import { norm } from "@/lib/domain/normalize";
 
 export interface YardimParams {
@@ -96,6 +101,27 @@ export async function runYardimJob(
   await syncUnits(triples);
   const maps = buildMaps(triples);
 
+  // Sorumlu Birim sütunu çözümü için haritayı zenginleştir: yardım filtre
+  // listesinde olmayan aktif birimler (örn. yalnız bağış evrenindeki iller) ve
+  // admin takma adları da tam ad eşleşmesine katılır. city/ilçe haritalarına
+  // dokunulmaz — il-ilçe ayrıştırması yalnız portal yardım listesiyle çalışır.
+  const activeUnits = await db.select().from(units).where(eq(units.active, true));
+  for (const u of activeUnits) {
+    if (!u.bolgeLabel || isExcludedUnit(u.name)) continue;
+    const k = norm(u.name);
+    if (!(k in maps.name2unit)) maps.name2unit[k] = [u.name, u.bolgeLabel];
+  }
+  const aliasRows = await db
+    .select({ aliasKey: unitAliases.aliasKey, unit: units })
+    .from(unitAliases)
+    .innerJoin(units, eq(unitAliases.unitId, units.id));
+  for (const a of aliasRows) {
+    if (!a.unit.active || !a.unit.bolgeLabel || isExcludedUnit(a.unit.name)) continue;
+    if (!(a.aliasKey in maps.name2unit)) {
+      maps.name2unit[a.aliasKey] = [a.unit.name, a.unit.bolgeLabel];
+    }
+  }
+
   await progress(30, "Bekleyen başvurular çekiliyor (bu adım birkaç dakika sürebilir)…");
   const bugun = new Date();
   const { kayitlar, okunan } = await fetchPending(client, maps, bugun, flow, stages);
@@ -124,7 +150,6 @@ export async function runYardimJob(
   }
 
   // birim adı → unit_id eşlemesi
-  const activeUnits = await db.select().from(units).where(eq(units.active, true));
   const idByName = new Map(activeUnits.map((u) => [u.name, u.id]));
 
   type AggRow = typeof yardimAggregates.$inferInsert;

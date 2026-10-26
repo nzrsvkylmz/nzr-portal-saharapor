@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMaps,
   eslestir,
+  eslestirSorumluBirim,
   matchDonationUnit,
   UNMATCHED,
   type UnitTriple,
@@ -44,6 +45,47 @@ describe("eslestir (relief_data.eslestir eşleniği)", () => {
   });
   it("hiç eşleşmeyen şehir EŞLENMEYEN olur", () => {
     expect(eslestir(maps, "Hakkari", "")[0]).toBe(UNMATCHED);
+  });
+});
+
+describe("eslestirSorumluBirim (yardım export 'Sorumlu Birim' sütunu)", () => {
+  it("birim adını tam ad üzerinden çözer (büyük/küçük harf dahil)", () => {
+    expect(eslestirSorumluBirim(maps, "Diyarbakır-Kayapınar")).toEqual({
+      bolge: "1.BÖLGE",
+      unit: "Diyarbakır-Kayapınar",
+      isBM: false,
+    });
+    expect(eslestirSorumluBirim(maps, "MALATYA")?.unit).toBe("Malatya");
+  });
+  it("boş metin ve özel birimler null döner (il-ilçe yoluna düşülür)", () => {
+    expect(eslestirSorumluBirim(maps, "")).toBeNull();
+    expect(eslestirSorumluBirim(maps, "  ")).toBeNull();
+    expect(eslestirSorumluBirim(maps, "Sosyal Yardımlar Birimi")).toBeNull();
+    expect(eslestirSorumluBirim(maps, "Suriye Yardımları Birimi")).toBeNull();
+  });
+  it("tanınmayan birim adı null döner", () => {
+    expect(eslestirSorumluBirim(maps, "Yeni Açılan Birim")).toBeNull();
+  });
+  it("bölge müdürlüğü seçimi isBM ile işaretlenir", () => {
+    expect(eslestirSorumluBirim(maps, "1.Bölge Müdürlüğü")).toEqual({
+      bolge: "1.BÖLGE",
+      unit: "1.Bölge Müdürlüğü",
+      isBM: true,
+    });
+  });
+  it("'BM / birim' biçiminde birim kısmı esas alınır", () => {
+    expect(eslestirSorumluBirim(maps, "1.Bölge Müdürlüğü / Malatya")?.unit).toBe(
+      "Malatya",
+    );
+  });
+  it("zenginleştirilmiş haritadaki (yardım listesi dışı) birim de çözülür", () => {
+    const m2 = buildMaps(units);
+    m2.name2unit["kırklareli"] = ["Kırklareli", "17.BÖLGE"];
+    expect(eslestirSorumluBirim(m2, "Kırklareli")).toEqual({
+      bolge: "17.BÖLGE",
+      unit: "Kırklareli",
+      isBM: false,
+    });
   });
 });
 

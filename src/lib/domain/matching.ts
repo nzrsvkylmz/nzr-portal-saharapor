@@ -93,6 +93,37 @@ export function eslestir(
   return [UNMATCHED, sehir || yerlesim || "?"];
 }
 
+// ---- yardım 'Sorumlu Birim' sütunu eşleme ----
+
+export interface SorumluBirimMatch {
+  bolge: string;
+  unit: string;
+  isBM: boolean; // bölge müdürlüğü seçiliyse il-ilçe ayrıştırması tercih edilir
+}
+
+/**
+ * Export'taki 'Sorumlu Birim' metnini birime çözer. Boş metin ve coğrafi
+ * olmayan özel birimler (Sosyal Yardımlar vb.) null döner — çağıran il-ilçe
+ * (Şehir/Yerleşim) ayrıştırmasına düşer. name2unit iş katmanında tüm aktif
+ * birimler ve takma adlarla zenginleştirilmiş olabilir; burada yalnız tam ad
+ * eşleşmesi yapılır, tahmine dayalı ayrıştırma il-ilçe yoluna bırakılır.
+ */
+export function eslestirSorumluBirim(
+  maps: UnitMaps,
+  raw: string,
+): SorumluBirimMatch | null {
+  const t = (raw ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  // "1.Bölge Müdürlüğü / Malatya" biçiminde gelirse birim kısmı esas alınır
+  const slash = t.indexOf("/");
+  const name =
+    slash === -1 ? t : t.slice(slash + 1).trim() || t.slice(0, slash).trim();
+  if (isExcludedUnit(name)) return null;
+  const hit = maps.name2unit[norm(name)];
+  if (!hit) return null;
+  return { bolge: hit[1], unit: hit[0], isBM: hit[0].includes("Bölge Müdürlüğü") };
+}
+
 // ---- bağış kabul birimi eşleme (yeni, birim düzeyi) ----
 
 /** "N.Bölge Müdürlüğü / Şehir" biçiminden bölge numarası. */

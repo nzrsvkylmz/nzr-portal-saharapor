@@ -358,8 +358,9 @@ export default async function YardimPage({
               ))}
             </ul>
             <p className="mt-3 text-xs text-ink/50">
-              Bu şehir/yerleşimler birim listesiyle eşleştirilemedi. Portalda yeni
-              birim açıldıysa yardım raporunu yeniden güncelleyin.
+              Bu kayıtların sorumlu birimi/şehri birim listesiyle eşleştirilemedi.
+              Portalda yeni birim açıldıysa raporu yeniden güncelleyin; kalıcı bir
+              yazım farkıysa Birimler ekranından takma ad tanımlayın.
             </p>
           </div>
         </section>

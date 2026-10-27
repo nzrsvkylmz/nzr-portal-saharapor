@@ -35,6 +35,11 @@ export const DEFAULT_STAGES: StageDef[] = YARDIM_STAGES.map(({ key, label }) => 
 /** Tüm hedef aşamaların flow filtresi: '23,179,25,188'. */
 export const DEFAULT_FLOW = YARDIM_STAGES.map((s) => s.flowId).join(",");
 
+/** İhtiyaç sahibi kategori filtresi. Yalnız bu üç kategori sahaya atanır;
+ * diğer kategorilerin süreci genel merkezden (Sosyal Yardımlar) yürüdüğünden
+ * sorumlu birimleri temsilcilik değildir ve rapora dahil edilmez. */
+export const DEFAULT_CATEGORY = "196,349,359";
+
 /** Kritik dosya bağlantıları için flow filtresi: yalnız kritik eşiğe giren
  * aşamalar (Sİ+BK → '23,179'). */
 export const KRITIK_FLOW = YARDIM_STAGES.filter((s) => s.kritik)
@@ -88,8 +93,8 @@ export interface PendingRecord {
 }
 
 /**
- * Hedef aşamalardaki TÜM başvuruları tek istekte çeker (flow filtresi —
- * export ASLA filtresiz çağrılmamalıdır, oturum kilidi yaratır).
+ * Hedef aşamalardaki TÜM başvuruları tek istekte çeker (flow + kategori
+ * filtresi — export ASLA filtresiz çağrılmamalıdır, oturum kilidi yaratır).
  * Dönüş: { kayitlar, okunan }. Kişisel alanlar hiç okunmaz.
  */
 export async function fetchPending(
@@ -98,9 +103,10 @@ export async function fetchPending(
   bugun: Date,
   flow: string = DEFAULT_FLOW,
   stages: StageDef[] = DEFAULT_STAGES,
+  category: string = DEFAULT_CATEGORY,
 ): Promise<{ kayitlar: PendingRecord[]; okunan: number }> {
   const text = await client.getReadonly(
-    `/crea/relief/application/export/now?flow=${flow}`,
+    `/crea/relief/application/export/now?flow=${flow}&category=${category}`,
     EXPORT_TIMEOUT_MS,
   );
   const rows = parseExportXml(text);
@@ -176,17 +182,18 @@ export async function fetchPending(
  * listeden (genelde birkaç kayıt) mahalle bilgisiyle ayıklanır.
  */
 export function portalTarihLink(baseUrl: string, flowId: number, tarih: string): string {
-  return `${baseUrl}/crea/relief/application/?flow=${flowId}&record=&record_a=${tarih}`;
+  return `${baseUrl}/crea/relief/application/?flow=${flowId}&category=${DEFAULT_CATEGORY}&record=&record_a=${tarih}`;
 }
 
-/** Portala derin bağlantı: birim + (opsiyonel) kritik tarih filtresi. */
+/** Portala derin bağlantı: birim + (opsiyonel) kritik tarih filtresi.
+ * Kategori filtresi de eklenir ki liste rapordaki sayılarla birebir örtüşsün. */
 export function portalLink(
   baseUrl: string,
   flow: string,
   depId: string,
   kritikTarih?: string, // DD.MM.YYYY — bu tarihten ESKİ başvurular
 ): string {
-  let url = `${baseUrl}/crea/relief/application/?flow=${flow}&department=${depId}`;
+  let url = `${baseUrl}/crea/relief/application/?flow=${flow}&category=${DEFAULT_CATEGORY}&department=${depId}`;
   if (kritikTarih) url += `&record=smaller&record_a=${kritikTarih}`;
   return url;
 }

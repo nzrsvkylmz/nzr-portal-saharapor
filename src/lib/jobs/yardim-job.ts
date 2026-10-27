@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { unitAliases, units, yardimAggregates } from "@/lib/db/schema";
 import { loadClient, saveClient } from "@/lib/portal/cookiejar";
 import {
+  DEFAULT_CATEGORY,
   DEFAULT_FLOW,
   DEFAULT_STAGES,
   fetchPending,
@@ -25,6 +26,7 @@ import { norm } from "@/lib/domain/normalize";
 export interface YardimParams {
   flow?: string; // varsayılan '23,179,25,188'
   stages?: StageDef[]; // varsayılan YARDIM_STAGES (si+bk+kk+od)
+  category?: string; // varsayılan '196,349,359' (ihtiyaç sahibi kategorileri)
 }
 
 type Progress = (pct: number, msg: string) => Promise<void>;
@@ -92,6 +94,7 @@ export async function runYardimJob(
 ): Promise<number> {
   const flow = params.flow ?? DEFAULT_FLOW;
   const stages = params.stages ?? DEFAULT_STAGES;
+  const category = params.category ?? DEFAULT_CATEGORY;
 
   await progress(5, "Portal oturumu yükleniyor…");
   const client = await loadClient(userId);
@@ -124,7 +127,14 @@ export async function runYardimJob(
 
   await progress(30, "Bekleyen başvurular çekiliyor (bu adım birkaç dakika sürebilir)…");
   const bugun = new Date();
-  const { kayitlar, okunan } = await fetchPending(client, maps, bugun, flow, stages);
+  const { kayitlar, okunan } = await fetchPending(
+    client,
+    maps,
+    bugun,
+    flow,
+    stages,
+    category,
+  );
   await saveClient(userId, client, "authenticated");
 
   await progress(80, "Özet hesaplanıyor ve kaydediliyor…");

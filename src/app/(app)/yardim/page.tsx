@@ -1,6 +1,6 @@
 import { desc, eq, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { canViewYardim, requireActiveUser } from "@/lib/auth/dal";
+import { canViewYardim, isAdminYardim, requireActiveUser } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { reportRuns, units, yardimAggregates } from "@/lib/db/schema";
 import { visibleScope } from "@/lib/domain/scope";
@@ -355,6 +355,28 @@ export default async function YardimPage({
     );
   }
 
+  // Genel merkez raporlama tablosu: bölge bazında Sosyal İnceleme bekleyen
+  // kişi sayısı + bekleme gün aralığı. Sosyal yardımlar birimi ekran
+  // görüntüsünü kurum içi raporlamada kullanır; yalnız SUPER_ADMIN ve
+  // ADMIN_YARDIM görür.
+  const SI_UZUN_GUN = 100; // bu günden uzun bekleyeni olan aralık kırmızı vurgulanır
+  const siBolgeler = bolgeler.map((b) => {
+    const s = b.stages.get("si");
+    const days = (s?.days ?? []).filter((d) => d >= 0);
+    return {
+      label: b.label,
+      count: s?.count ?? 0,
+      min: days.length ? Math.min(...days) : null,
+      max: days.length ? Math.max(...days) : null,
+      days,
+    };
+  });
+  const siToplam = siBolgeler.reduce((t, b) => t + b.count, 0);
+  const siTumGunler = siBolgeler.flatMap((b) => b.days);
+  const siOrtalama = siTumGunler.length
+    ? Math.round(siTumGunler.reduce((t, g) => t + g, 0) / siTumGunler.length)
+    : 0;
+
   // Yönetici dashboard'u: bölge kartları → temsilcilik drill-down → modal.
   const adminBolgeler: YardimBolge[] = bolgeler.map((b) => ({
     label: b.label,
@@ -399,6 +421,72 @@ export default async function YardimPage({
               Portalda yeni birim açıldıysa raporu yeniden güncelleyin; kalıcı bir
               yazım farkıysa Birimler ekranından takma ad tanımlayın.
             </p>
+          </div>
+        </section>
+      )}
+
+      {isAdminYardim(user) && siBolgeler.length > 0 && (
+        <section>
+          <h2 className="font-heading text-lg font-semibold text-ink/70">
+            Bölge Bazında Sosyal İnceleme Bekleyenler (yalnız sosyal yardımlar
+            birimi görür)
+          </h2>
+          <div className="mt-3 max-w-2xl rounded-2xl bg-white p-4 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-center text-sm">
+                <thead>
+                  <tr className="bg-primary-dark text-white">
+                    <th className="border border-white px-3 py-2 font-semibold">
+                      Sıra
+                    </th>
+                    <th className="border border-white px-3 py-2 font-semibold">
+                      Bölge
+                    </th>
+                    <th className="border border-white px-3 py-2 font-semibold">
+                      Sosyal İnceleme Bekleyen / Kişi Sayısı
+                    </th>
+                    <th className="border border-white px-3 py-2 font-semibold">
+                      Sosyal İnceleme Beklediği Gün Sayısı Aralığı
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {siBolgeler.map((b, i) => (
+                    <tr key={b.label} className={i % 2 === 1 ? "bg-mint/40" : "bg-white"}>
+                      <td className="border border-ink/10 px-3 py-1.5 font-semibold">
+                        {i + 1}
+                      </td>
+                      <td className="border border-ink/10 px-3 py-1.5 font-semibold">
+                        {b.label}
+                      </td>
+                      <td className="border border-ink/10 px-3 py-1.5 font-semibold">
+                        {b.count}
+                      </td>
+                      <td
+                        className={`border border-ink/10 px-3 py-1.5 font-bold ${
+                          b.max !== null && b.max > SI_UZUN_GUN
+                            ? "text-red-600"
+                            : "text-ink"
+                        }`}
+                      >
+                        {b.min !== null ? `${b.min} - ${b.max} Gün Arası` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-primary-dark font-semibold text-white">
+                    <td className="border border-white px-3 py-2" colSpan={2}>
+                      Toplam
+                    </td>
+                    <td className="border border-white px-3 py-2">{siToplam}</td>
+                    <td className="border border-white px-3 py-2">
+                      Ortalama = {siOrtalama}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
         </section>
       )}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/health"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/health", "/api/egress-ip"];
 
 /**
  * Hafif kapı: oturum cookie'si yoksa /login'e yönlendirir.

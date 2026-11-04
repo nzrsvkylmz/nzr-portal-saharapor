@@ -1138,7 +1138,7 @@ export default function BagisDashboard({
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           icon={I.coins()}
-          label="Toplam Gelir"
+          label="Toplam Bağış"
           value={trMoney(gelir + (admin && !selBolge ? belirtilmemisGelir : 0))}
           sub={
             admin && !selBolge && belirtilmemisGelir > 0 ? (

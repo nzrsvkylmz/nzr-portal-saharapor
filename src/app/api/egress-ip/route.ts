@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-// Geçici teşhis ucu: Sistem Plus'ın gördüğü çıkış IP'sini doğrulamak için.
-// Sabit IP sorunu çözülünce silinecek.
+// Sistem Plus'ın gördüğü çıkış IP'sini gösterir; Railway sabit çıkış
+// IP'lerinin devrede olduğunu kontrol etmek için.
 export const dynamic = "force-dynamic";
 
 export async function GET() {

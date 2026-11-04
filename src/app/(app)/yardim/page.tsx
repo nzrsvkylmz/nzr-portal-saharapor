@@ -1,6 +1,6 @@
 import { desc, eq, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { canViewYardim, isAdminYardim, requireActiveUser } from "@/lib/auth/dal";
+import { canViewYardim, isAdminYardim, isBolgeScoped, requireActiveUser } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { reportRuns, units, yardimAggregates } from "@/lib/db/schema";
 import { visibleScope } from "@/lib/domain/scope";
@@ -337,7 +337,7 @@ export default async function YardimPage({
   // Saha rolleri (bölge müdürü / temsilci): kart + grafik dashboard'u.
   if (!scope.all) {
     const headerLabel =
-      user.role === "BOLGE_MUDURU"
+      isBolgeScoped(user)
         ? `${scope.bolgeLabels[0] ?? ""} · Saha Görünümü`
         : detayRows.length === 1
           ? `${detayRows[0].tems} Temsilciliği`

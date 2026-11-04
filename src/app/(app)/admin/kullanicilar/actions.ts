@@ -16,7 +16,12 @@ const ROLES: Role[] = [
   "ADMIN_YARDIM",
   "BOLGE_MUDURU",
   "TEMSILCI",
+  "GONULLU_YARDIM",
+  "GONULLU_BAGIS",
 ];
+
+/** Bölge seçimi zorunlu roller: müdür + bölge heyeti gönüllüleri. */
+const BOLGE_ROLLERI: Role[] = ["BOLGE_MUDURU", "GONULLU_YARDIM", "GONULLU_BAGIS"];
 
 /** Kullanıcıya rol/birim atar ve aktifleştirir. Yalnız SUPER_ADMIN. */
 export async function updateUserAccess(formData: FormData): Promise<void> {
@@ -54,10 +59,10 @@ export async function updateUserAccess(formData: FormData): Promise<void> {
     const status =
       statusRaw === "disabled" ? "disabled" : role ? "active" : "pending";
     const bolgeNo =
-      role === "BOLGE_MUDURU" && bolgeNoRaw ? Number(bolgeNoRaw) : null;
+      role && BOLGE_ROLLERI.includes(role) && bolgeNoRaw ? Number(bolgeNoRaw) : null;
 
-    if (role === "BOLGE_MUDURU" && !bolgeNo) {
-      throw new Error("Bölge müdürü için bölge seçilmelidir.");
+    if (role && BOLGE_ROLLERI.includes(role) && !bolgeNo) {
+      throw new Error("Bu rol için bölge seçilmelidir.");
     }
     if (role === "TEMSILCI" && unitIds.length === 0) {
       throw new Error("Temsilci için en az bir birim seçilmelidir.");
@@ -112,9 +117,9 @@ export async function createManualUser(formData: FormData): Promise<void> {
     if (!nick) throw new Error("Portal kullanıcı adı (nick) gerekli.");
     const role = ROLES.includes(roleRaw as Role) ? (roleRaw as Role) : null;
     const bolgeNo =
-      role === "BOLGE_MUDURU" && bolgeNoRaw ? Number(bolgeNoRaw) : null;
-    if (role === "BOLGE_MUDURU" && !bolgeNo) {
-      throw new Error("Bölge müdürü için bölge seçilmelidir.");
+      role && BOLGE_ROLLERI.includes(role) && bolgeNoRaw ? Number(bolgeNoRaw) : null;
+    if (role && BOLGE_ROLLERI.includes(role) && !bolgeNo) {
+      throw new Error("Bu rol için bölge seçilmelidir.");
     }
 
     const unitIds: number[] = [];

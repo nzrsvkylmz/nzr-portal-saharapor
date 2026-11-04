@@ -11,6 +11,8 @@ const ROL_ADI: Record<string, string> = {
   ADMIN_YARDIM: "Sosyal Yardımlar",
   BOLGE_MUDURU: "Bölge Müdürü",
   TEMSILCI: "Temsilci",
+  GONULLU_YARDIM: "S.Yardımlar Gönüllüsü",
+  GONULLU_BAGIS: "Mevzuat Gönüllüsü",
 };
 
 const GUN_SECENEKLERI = [7, 15, 30] as const;
@@ -74,9 +76,9 @@ export default async function KullanimPage({
     unitsByUser.set(a.userId, e);
   }
 
-  /** Kullanıcının bölge etiketi: müdürde bolgeNo, temsilcide birimlerinin bölgeleri. */
+  /** Kullanıcının bölge etiketi: bölge kapsamlı rollerde bolgeNo, temsilcide birimlerinin bölgeleri. */
   const bolgeText = (u: User): string => {
-    if (u.role === "BOLGE_MUDURU" && u.bolgeNo) return `${u.bolgeNo}.BÖLGE`;
+    if (u.bolgeNo) return `${u.bolgeNo}.BÖLGE`;
     const b = unitsByUser.get(u.id)?.bolgeler;
     return b?.size ? [...b].sort((x, y) => bolgeOrder(x) - bolgeOrder(y)).join(", ") : "—";
   };

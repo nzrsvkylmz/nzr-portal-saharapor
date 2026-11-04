@@ -15,6 +15,8 @@ const ROLE_OPTIONS = [
   ["", "— Rol seç —"],
   ["TEMSILCI", "Temsilci"],
   ["BOLGE_MUDURU", "Bölge Müdürü"],
+  ["GONULLU_YARDIM", "Sosyal Yardımlar Gönüllüsü (bölge)"],
+  ["GONULLU_BAGIS", "Mevzuat ve Kontrol Gönüllüsü (bölge)"],
   ["ADMIN_BAGIS", "Muhasebe (Bağış Admin)"],
   ["ADMIN_YARDIM", "Sosyal Yardımlar (Yardım Admin)"],
   ["SUPER_ADMIN", "Süper Admin"],
@@ -24,6 +26,7 @@ const ROL_FILTRELERI = [
   ["", "Tümü"],
   ["TEMSILCI", "Temsilciler"],
   ["BOLGE_MUDURU", "Bölge Müdürleri"],
+  ["GONULLU", "Gönüllüler"],
   ["ADMIN", "Adminler"],
 ] as const;
 
@@ -60,6 +63,9 @@ export default async function KullanicilarPage({
     if (rolSecimi === "ADMIN") {
       return u.role === "ADMIN_BAGIS" || u.role === "ADMIN_YARDIM" || u.role === "SUPER_ADMIN";
     }
+    if (rolSecimi === "GONULLU") {
+      return u.role === "GONULLU_YARDIM" || u.role === "GONULLU_BAGIS";
+    }
     return u.role === rolSecimi;
   });
   const rolSayisi = (v: string) =>
@@ -70,7 +76,11 @@ export default async function KullanicilarPage({
             (u) =>
               u.role === "ADMIN_BAGIS" || u.role === "ADMIN_YARDIM" || u.role === "SUPER_ADMIN",
           ).length
-        : tanimli.filter((u) => u.role === v).length;
+        : v === "GONULLU"
+          ? tanimli.filter(
+              (u) => u.role === "GONULLU_YARDIM" || u.role === "GONULLU_BAGIS",
+            ).length
+          : tanimli.filter((u) => u.role === v).length;
 
   function UserRow({ user }: { user: (typeof allUsers)[number] }) {
     const assigned = unitsByUser.get(user.id) ?? [];
@@ -119,7 +129,7 @@ export default async function KullanicilarPage({
               </select>
             </label>
             <label className="flex items-center gap-2">
-              Bölge (müdür için)
+              Bölge (müdür/gönüllü)
               <select
                 name="bolgeNo"
                 defaultValue={user.bolgeNo ?? ""}
@@ -283,7 +293,7 @@ export default async function KullanicilarPage({
             </select>
           </label>
           <label className="grid gap-1">
-            Bölge (müdür için)
+            Bölge (müdür/gönüllü)
             <select name="bolgeNo" className="rounded-lg border border-mint px-2 py-1">
               <option value="">—</option>
               {bolgeler.map((b) => (

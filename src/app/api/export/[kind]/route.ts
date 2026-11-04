@@ -10,7 +10,7 @@ import {
   yardimAggregates,
 } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/auth/session";
-import { canViewBagis, canViewYardim } from "@/lib/auth/dal";
+import { canViewBagis, canViewYardim, isBolgeScoped } from "@/lib/auth/dal";
 import { visibleScope } from "@/lib/domain/scope";
 import {
   monthList,
@@ -135,7 +135,7 @@ export async function GET(
     const unitAggRows = aggRows.filter((r) => {
       if (r.scope !== "unit") return false;
       if (scope.all) return true;
-      if (user.role === "BOLGE_MUDURU") return scope.bolgeLabels.includes(r.bolgeLabel);
+      if (isBolgeScoped(user)) return scope.bolgeLabels.includes(r.bolgeLabel);
       return (
         (r.unitId !== null && scope.unitIds.includes(r.unitId)) ||
         scope.unitLabels.includes(r.unitLabel ?? "")
@@ -193,7 +193,7 @@ export async function GET(
         if (bolgeParam && u.bolgeLabel !== bolgeParam) continue;
         const visible = scope.all
           ? true
-          : user.role === "BOLGE_MUDURU"
+          : isBolgeScoped(user)
             ? u.bolgeLabel !== null && scope.bolgeLabels.includes(u.bolgeLabel)
             : scope.unitIds.includes(unitId);
         if (!visible) continue;
@@ -214,7 +214,7 @@ export async function GET(
       (r) =>
         r.scope === "bolge" &&
         (scope.all ||
-          (user.role === "BOLGE_MUDURU" && scope.bolgeLabels.includes(r.bolgeLabel))),
+          (isBolgeScoped(user) && scope.bolgeLabels.includes(r.bolgeLabel))),
     );
 
     const n = (l: string) => Number(/^(\d+)/.exec(l)?.[1]) || 900;

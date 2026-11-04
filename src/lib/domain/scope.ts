@@ -7,8 +7,11 @@
  *    görür (parent_unit_id hiyerarşisi — isimden tahmin edilmez).
  *  - "yardim": temsilci yalnız atandığı birim(ler)i görür; alt kırılım yok.
  * Bölge müdürü her iki alanda kendi bölgesinin tamamını, adminler her şeyi görür.
+ * Bölge gönüllüleri (GONULLU_*) müdürle aynı bölge kapsamını alır; hangi
+ * rapora girebildikleri dal.ts'teki canViewBagis/canViewYardim ile sınırlanır.
  */
 import { eq } from "drizzle-orm";
+import { isBolgeScoped } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { units, userUnits, type Unit, type User } from "@/lib/db/schema";
 
@@ -52,7 +55,7 @@ export async function visibleScope(
     return { all: true, bolgeLabels: [], unitIds: [], unitLabels: [] };
   }
 
-  if (user.role === "BOLGE_MUDURU" && user.bolgeNo) {
+  if (isBolgeScoped(user) && user.bolgeNo) {
     const rows = await db
       .select()
       .from(units)

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { canViewBagis, requireActiveUser } from "@/lib/auth/dal";
+import { canViewBagis, isBolgeScoped, requireActiveUser } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { bagisAggregates, plans, reportRuns, unitPlans, units } from "@/lib/db/schema";
 import { visibleScope } from "@/lib/domain/scope";
@@ -127,7 +127,7 @@ export default async function BagisPage({
     .filter((r) => {
       if (r.scope !== "unit") return false;
       if (scope.all) return true; // yönetici: bölge seçimi dashboard'da yapılır
-      if (user.role === "BOLGE_MUDURU") return scope.bolgeLabels.includes(r.bolgeLabel);
+      if (isBolgeScoped(user)) return scope.bolgeLabels.includes(r.bolgeLabel);
       return (
         (r.unitId !== null && scope.unitIds.includes(r.unitId)) ||
         scope.unitLabels.includes(r.unitLabel ?? "")
@@ -219,7 +219,7 @@ export default async function BagisPage({
       if (!u || !u.active || topOf(unitId)?.id !== unitId) continue;
       const visible = scope.all
         ? true
-        : user.role === "BOLGE_MUDURU"
+        : isBolgeScoped(user)
           ? u.bolgeLabel !== null && scope.bolgeLabels.includes(u.bolgeLabel)
           : scope.unitIds.includes(unitId);
       if (!visible) continue;
@@ -263,7 +263,7 @@ export default async function BagisPage({
     if (r.scope !== "unit" || r.month === null) return false;
     if (sart && r.activity !== sart) return false;
     if (scope.all) return true;
-    if (user.role === "BOLGE_MUDURU") return scope.bolgeLabels.includes(r.bolgeLabel);
+    if (isBolgeScoped(user)) return scope.bolgeLabels.includes(r.bolgeLabel);
     return (
       (r.unitId !== null && scope.unitIds.includes(r.unitId)) ||
       scope.unitLabels.includes(r.unitLabel ?? "")
@@ -339,7 +339,7 @@ export default async function BagisPage({
       plan: unitPlanByMonth.get(ay) ?? 0,
     }));
     const headerLabel =
-      user.role === "BOLGE_MUDURU"
+      isBolgeScoped(user)
         ? `${scope.bolgeLabels[0] ?? ""} · Saha Görünümü`
         : dashUnits.length === 1
           ? `${dashUnits[0].label} Temsilciliği`

@@ -16,8 +16,15 @@ function fmtTime(d: Date | null): string {
 
 export default async function Dashboard() {
   const user = await requireActiveUser();
-  // Saha rolleri önce yardım raporunu görür; bağışa menüden geçerler
-  if (user.role === "BOLGE_MUDURU" || user.role === "TEMSILCI") redirect("/yardim");
+  // Saha rolleri doğrudan kendi raporuna gider; bağış gönüllüsü yardımı göremez
+  if (user.role === "GONULLU_BAGIS") redirect("/bagis");
+  if (
+    user.role === "BOLGE_MUDURU" ||
+    user.role === "TEMSILCI" ||
+    user.role === "GONULLU_YARDIM"
+  ) {
+    redirect("/yardim");
+  }
 
   const [lastBagis] = await db
     .select()

@@ -11,6 +11,8 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN_YARDIM: "Sosyal Yardımlar",
   BOLGE_MUDURU: "Bölge Müdürü",
   TEMSILCI: "Temsilci",
+  GONULLU_YARDIM: "Sosyal Yardımlar Gönüllüsü",
+  GONULLU_BAGIS: "Mevzuat ve Kontrol Gönüllüsü",
 };
 
 export default async function AppLayout({
@@ -18,7 +20,11 @@ export default async function AppLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser();
   const active = user.status === "active" && !!user.role;
-  const sahaRolu = user.role === "BOLGE_MUDURU" || user.role === "TEMSILCI";
+  const sahaRolu =
+    user.role === "BOLGE_MUDURU" ||
+    user.role === "TEMSILCI" ||
+    user.role === "GONULLU_YARDIM" ||
+    user.role === "GONULLU_BAGIS";
 
   const mobileLinks: MobileNavLink[] = active
     ? ([

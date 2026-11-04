@@ -64,6 +64,13 @@
       "when": 1793027733538,
       "tag": "0008_absent_rick_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793779487431,
+      "tag": "0009_mysterious_vulture",
+      "breakpoints": true
     }
   ]
 }

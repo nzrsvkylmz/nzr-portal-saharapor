@@ -35,14 +35,23 @@ export function isAdminYardim(user: User): boolean {
   return user.role === "SUPER_ADMIN" || user.role === "ADMIN_YARDIM";
 }
 
-/** Bağış raporunu görebilir mi — yardım admini (sosyal yardımlar) göremez. */
+/** Bağış raporunu görebilir mi — yardım tarafı (admin + gönüllü) göremez. */
 export function canViewBagis(user: User): boolean {
-  return user.role !== "ADMIN_YARDIM";
+  return user.role !== "ADMIN_YARDIM" && user.role !== "GONULLU_YARDIM";
 }
 
-/** Yardım raporunu görebilir mi — bağış admini (muhasebe) göremez. */
+/** Yardım raporunu görebilir mi — bağış tarafı (admin + gönüllü) göremez. */
 export function canViewYardim(user: User): boolean {
-  return user.role !== "ADMIN_BAGIS";
+  return user.role !== "ADMIN_BAGIS" && user.role !== "GONULLU_BAGIS";
+}
+
+/** Bölge kapsamlı saha rolleri: bölge müdürü + bölge heyeti gönüllüleri. */
+export function isBolgeScoped(user: User): boolean {
+  return (
+    user.role === "BOLGE_MUDURU" ||
+    user.role === "GONULLU_YARDIM" ||
+    user.role === "GONULLU_BAGIS"
+  );
 }
 
 export function isAnyAdmin(user: User): boolean {

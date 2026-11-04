@@ -24,6 +24,8 @@ export const roleEnum = pgEnum("role", [
   "ADMIN_YARDIM",
   "BOLGE_MUDURU",
   "TEMSILCI",
+  "GONULLU_YARDIM", // Sosyal Yardımlar Saha Gönüllüsü: kendi bölgesinin yardım raporu
+  "GONULLU_BAGIS", // Mevzuat ve Kontrol Saha Gönüllüsü: kendi bölgesinin bağış raporu
 ]);
 
 export const userStatusEnum = pgEnum("user_status", [
@@ -64,7 +66,7 @@ export const users = pgTable("users", {
   displayName: text("display_name"),
   role: roleEnum("role"), // NULL = yetki bekliyor
   status: userStatusEnum("status").notNull().default("pending"),
-  bolgeNo: integer("bolge_no"), // BOLGE_MUDURU kapsamı
+  bolgeNo: integer("bolge_no"), // bölge kapsamlı roller (müdür + gönüllüler)
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -26,12 +26,14 @@ export interface YardimNode {
   children: YardimNode[];
 }
 
-/** Portalda temsilciliğe atanmamış kayıt: tarihli kısa-liste linkiyle ayıklanır. */
+/** Portalda temsilciliğe atanmamış kayıt: doğrudan detay linkiyle açılır
+ * (Başvuru ID'siz eski snapshot'larda tarihli kısa-liste linkine düşer). */
 export interface AtanmamisRow {
   asama: string; // aşama kısa adı
   tarih: string; // başvuru tarihi DD.MM.YYYY
   yer: string; // 'Seyhan · Barış Mah.'
-  url: string | null; // portalda aynı tarih+aşama kısa listesi
+  url: string | null; // başvuru detayı (direct) ya da tarih+aşama kısa listesi
+  direct?: boolean; // true → url dosyayı portalda doğrudan açar
 }
 
 export interface YardimUnitRow {
@@ -684,10 +686,11 @@ function UnitModal({
                 Bu başvuruların portalda Sorumlu Birim alanı boş (ya da özel bir
                 birimde); ihtiyaç sahibinin il-ilçe bilgisinden bu temsilciliğe
                 sayıldılar ve
-                birimin portal filtresinde <em>görünmezler</em>. &quot;Bul&quot;
-                bağlantısı aynı tarihte açılmış aynı aşamadaki başvuruların kısa
-                listesini açar. Yakında doğrudan başvuruyu açmanızı sağlayacak
-                geliştirme yapılacak.
+                birimin portal filtresinde <em>görünmezler</em>. &quot;Aç&quot;
+                bağlantısı başvuru dosyasını portalda doğrudan açar.
+                (&quot;Bul&quot; görünüyorsa rapor eski — bağlantı aynı tarihli
+                başvuruların kısa listesini açar; raporu güncelleyince doğrudan
+                bağlantıya döner.)
               </p>
               <ul className="space-y-1.5">
                 {u.atanmamis.map((r, i) => (
@@ -707,7 +710,7 @@ function UnitModal({
                         rel="noreferrer"
                         className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
                       >
-                        Bul {I.external()}
+                        {r.direct ? "Aç" : "Bul"} {I.external()}
                       </a>
                     )}
                   </li>

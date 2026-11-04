@@ -10,6 +10,7 @@ import {
   DEFAULT_FLOW,
   KRITIK_FLOW,
   portalLink,
+  portalBasvuruLink,
   portalTarihLink,
 } from "@/lib/portal/relief";
 import {
@@ -47,8 +48,8 @@ function normDistricts(d: DistrictDays | undefined): Record<string, MahalleDays>
   return out;
 }
 
-// portalda temsilciliğe atanmamış kayıt: tarih + yerleşim + mahalle
-type AtanmamisItem = { t: string; y: string; m: string };
+// portalda temsilciliğe atanmamış kayıt: tarih + yerleşim + mahalle + ID
+type AtanmamisItem = { t: string; y: string; m: string; i?: string };
 
 interface RowData {
   label: string;
@@ -268,8 +269,8 @@ export default async function YardimPage({
       }
     }
     const topWaits = waits.sort((a, z) => z.gun - a.gun).slice(0, 5);
-    // portalda temsilciliğe atanmamış kayıtlar: ayıklama listesi + tarihli
-    // kısa-liste linki (portalda il-ilçe filtresi olmadığından tek yol bu)
+    // portalda temsilciliğe atanmamış kayıtlar: Başvuru ID varsa dosyayı
+    // doğrudan açan detay linki; yoksa (eski snapshot) tarihli kısa-liste
     const trDateKey = (t: string) => t.split(".").reverse().join("");
     const atanmamis: AtanmamisRow[] = STAGE_KEYS.flatMap((k) => {
       const stage = stageByKey.get(k);
@@ -280,7 +281,12 @@ export default async function YardimPage({
           it.m && it.m !== "Belirtilmemiş"
             ? `${it.y} · ${it.m}`
             : it.y,
-        url: stage ? portalTarihLink(BASE_URL, stage.flowId, it.t) : null,
+        url: it.i
+          ? portalBasvuruLink(BASE_URL, it.i)
+          : stage
+            ? portalTarihLink(BASE_URL, stage.flowId, it.t)
+            : null,
+        direct: Boolean(it.i),
       }));
     }).sort((a, z) => trDateKey(a.tarih).localeCompare(trDateKey(z.tarih)));
     return {

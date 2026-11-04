@@ -142,7 +142,8 @@ export async function runYardimJob(
   // bölge → stage → günler ve birim → stage → günler +
   // ilçe(Yerleşim) → mahalle kırılımı + portalda atanmamış kayıt listesi
   const bolgeAgg = new Map<string, Map<string, number[]>>();
-  type AtanmamisItem = { t: string; y: string; m: string };
+  // t=tarih, y=yerleşim, m=mahalle, i=portal başvuru ID'si (doğrudan link)
+  type AtanmamisItem = { t: string; y: string; m: string; i?: string };
   type StageAcc = {
     days: number[];
     districts: Map<string, Map<string, number[]>>;
@@ -165,7 +166,12 @@ export async function runYardimJob(
     mah.set(k.mahalle, [...(mah.get(k.mahalle) ?? []), k.gun]);
     acc.districts.set(k.yerlesim, mah);
     if (k.atanmamis && k.tarih) {
-      acc.atanmamis.push({ t: k.tarih, y: k.yerlesim, m: k.mahalle });
+      acc.atanmamis.push({
+        t: k.tarih,
+        y: k.yerlesim,
+        m: k.mahalle,
+        ...(k.id ? { i: k.id } : {}),
+      });
     }
     u.set(k.stageKey, acc);
     unitAgg.set(key, u);

@@ -73,6 +73,7 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       mahalle: "Hidayet Mah.",
       atanmamis: false,
       tarih: "07.07.2026",
+      id: "48121",
     });
     // Sorumlu Birim boş → il-ilçe ayrıştırması; Mahalle boş → 'Belirtilmemiş'
     expect(kayitlar[1]).toEqual({
@@ -84,6 +85,7 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       mahalle: "Belirtilmemiş",
       atanmamis: true,
       tarih: "01.10.2026",
+      id: "51873",
     });
     // Özel birim (Sosyal Yardımlar) → il-ilçe; listede olmayan şehir → EŞLENMEYEN
     expect(kayitlar[2]).toEqual({
@@ -95,6 +97,7 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       mahalle: "Mutlukent Mah.",
       atanmamis: true,
       tarih: "05.10.2026",
+      id: "52014",
     });
     // BM seçili → il-ilçe tercih edilir (Malatya); temsilciliğe atanmamış sayılır
     expect(kayitlar[3]).toEqual({
@@ -106,6 +109,7 @@ describe("fetchPending (yardım başvuru özeti)", () => {
       mahalle: "İnönü Mah.",
       atanmamis: true,
       tarih: "30.09.2026",
+      id: "51790",
     });
   });
 });

@@ -2,9 +2,10 @@
  * Yardım modülü veri katmanı — relief_data.py portu.
  *
  * Gizlilik ilkesi: HİÇBİR kişisel veri okunmaz/saklanmaz. Başvuru exportundan
- * yalnızca Başvuru tarihi, Şehir, Yerleşim, Mahalle, Sorumlu Birim ve Aşama
- * sütunları kullanılır; satırlar bellekte işlenir, DB'ye sadece
- * bölge/temsilcilik bazlı TOPLAM sayılar ve gün listeleri yazılır.
+ * yalnızca Başvuru ID (portal dosya numarası — kişisel veri değildir), Başvuru
+ * tarihi, Şehir, Yerleşim, Mahalle, Sorumlu Birim ve Aşama sütunları
+ * kullanılır; satırlar bellekte işlenir, DB'ye sadece bölge/temsilcilik bazlı
+ * TOPLAM sayılar, gün listeleri ve atanmamış dosyaların ID'leri yazılır.
  */
 import * as cheerio from "cheerio";
 import { daysBetween, norm, parseTrDate, toTrDate } from "@/lib/domain/normalize";
@@ -90,6 +91,7 @@ export interface PendingRecord {
    * il-ilçeden atandı — birimin portal linkinde (department=) görünmez. */
   atanmamis: boolean;
   tarih: string; // başvuru tarihi 'DD.MM.YYYY' — portalda bulma filtresi için
+  id: string; // portal başvuru ID'si (eski exportlarda sütun yoksa boş)
 }
 
 /**
@@ -121,6 +123,9 @@ export async function fetchPending(
   const iMah = h.indexOf("Mahalle"); // opsiyonel: eski exportlarda olmayabilir
   // opsiyonel: Sorumlu Birim sütunu (Sistem Plus 10.2026'da ekledi)
   const iSor = h.findIndex((c) => norm(c) === "sorumlu birim");
+  // opsiyonel: Başvuru ID sütunu (Sistem Plus 11.2026'da ekledi) — portalda
+  // dosyayı doğrudan açan detay linki için
+  const iId = h.findIndex((c) => norm(c) === norm("Başvuru ID"));
   if (iT === -1 || iSeh === -1 || iYer === -1 || iAsm === -1) {
     throw new RemoteError(`Başvuru export sütunları beklenenden farklı: ${h.join(", ")}`);
   }
@@ -170,6 +175,7 @@ export async function fetchPending(
       // doğrudan temsilcilik ataması kullanılamadıysa kayıt "atanmamış"
       atanmamis: !(sorumlu && !sorumlu.isBM),
       tarih: tarih ? toTrDate(tarih) : "",
+      id: iId !== -1 && iId < r.length ? r[iId].trim() : "",
     });
   }
   return { kayitlar, okunan: data.length };
@@ -183,6 +189,11 @@ export async function fetchPending(
  */
 export function portalTarihLink(baseUrl: string, flowId: number, tarih: string): string {
   return `${baseUrl}/crea/relief/application/?flow=${flowId}&category=${DEFAULT_CATEGORY}&record=&record_a=${tarih}`;
+}
+
+/** Başvuruyu portalda doğrudan açan detay bağlantısı (Başvuru ID ile). */
+export function portalBasvuruLink(baseUrl: string, id: string): string {
+  return `${baseUrl}/crea/relief/application/detail/${id}`;
 }
 
 /** Portala derin bağlantı: birim + (opsiyonel) kritik tarih filtresi.

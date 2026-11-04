@@ -4,6 +4,7 @@
  <Worksheet ss:Name="Rapor">
   <Table>
    <Row>
+    <Cell><Data ss:Type="String">Başvuru ID</Data></Cell>
     <Cell><Data ss:Type="String">Başvuru</Data></Cell>
     <Cell><Data ss:Type="String">Şehir</Data></Cell>
     <Cell><Data ss:Type="String">Yerleşim</Data></Cell>
@@ -12,6 +13,7 @@
     <Cell><Data ss:Type="String">Sorumlu Birim</Data></Cell>
    </Row>
    <Row>
+    <Cell><Data ss:Type="Number">48121</Data></Cell>
     <Cell><Data ss:Type="String">07.07.2026</Data></Cell>
     <Cell><Data ss:Type="String">Malatya</Data></Cell>
     <Cell><Data ss:Type="String">Battalgazi</Data></Cell>
@@ -20,6 +22,7 @@
     <Cell><Data ss:Type="String">Elazığ</Data></Cell>
    </Row>
    <Row>
+    <Cell><Data ss:Type="Number">51873</Data></Cell>
     <Cell><Data ss:Type="String">01.10.2026</Data></Cell>
     <Cell><Data ss:Type="String">İstanbul</Data></Cell>
     <Cell><Data ss:Type="String">Esenyurt</Data></Cell>
@@ -28,6 +31,7 @@
     <Cell><Data ss:Type="String"></Data></Cell>
    </Row>
    <Row>
+    <Cell><Data ss:Type="Number">52014</Data></Cell>
     <Cell><Data ss:Type="String">05.10.2026</Data></Cell>
     <Cell><Data ss:Type="String">Ankara</Data></Cell>
     <Cell><Data ss:Type="String">Çankaya</Data></Cell>
@@ -36,6 +40,7 @@
     <Cell><Data ss:Type="String">Sosyal Yardımlar Birimi</Data></Cell>
    </Row>
    <Row>
+    <Cell><Data ss:Type="Number">51790</Data></Cell>
     <Cell><Data ss:Type="String">30.09.2026</Data></Cell>
     <Cell><Data ss:Type="String">Malatya</Data></Cell>
     <Cell><Data ss:Type="String">Yeşilyurt</Data></Cell>

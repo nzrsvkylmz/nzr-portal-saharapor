@@ -365,7 +365,6 @@ export default async function YardimPage({
   // kişi sayısı + bekleme gün aralığı. Sosyal yardımlar birimi ekran
   // görüntüsünü kurum içi raporlamada kullanır; yalnız SUPER_ADMIN ve
   // ADMIN_YARDIM görür.
-  const SI_UZUN_GUN = 100; // bu günden uzun bekleyeni olan aralık kırmızı vurgulanır
   const siBolgeler = bolgeler.map((b) => {
     const s = b.stages.get("si");
     const days = (s?.days ?? []).filter((d) => d >= 0);
@@ -470,7 +469,7 @@ export default async function YardimPage({
                       </td>
                       <td
                         className={`border border-ink/10 px-3 py-1.5 font-bold ${
-                          b.max !== null && b.max > SI_UZUN_GUN
+                          b.max !== null && b.max > esik
                             ? "text-red-600"
                             : "text-ink"
                         }`}

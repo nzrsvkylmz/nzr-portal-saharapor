@@ -5,6 +5,7 @@ export default async function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireActiveUser();
-  if (!isAnyAdmin(user)) redirect("/");
+  // Bölge müdürü yalnız kullanım takibine girer; diğer alt sayfalar kendi rol korumasıyla kapalıdır.
+  if (!isAnyAdmin(user) && user.role !== "BOLGE_MUDURU") redirect("/");
   return <>{children}</>;
 }

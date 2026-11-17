@@ -1,4 +1,5 @@
 import { and, count, eq, gt, ne } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { auditLog, units, userUnits, users, type User } from "@/lib/db/schema";
@@ -42,25 +43,43 @@ export default async function KullanimPage({
 }: {
   searchParams: Promise<{ gun?: string }>;
 }) {
-  await requireRole("SUPER_ADMIN");
+  const viewer = await requireRole("SUPER_ADMIN", "BOLGE_MUDURU");
+  // Bölge müdürü yalnız kendi bölgesini görür; bölge ataması yoksa sayfa açılmaz.
+  const bolgeNo = viewer.role === "BOLGE_MUDURU" ? viewer.bolgeNo : null;
+  if (viewer.role === "BOLGE_MUDURU" && !bolgeNo) redirect("/");
   const sp = await searchParams;
   const gun = GUN_SECENEKLERI.includes(Number(sp.gun) as 7 | 15 | 30)
     ? Number(sp.gun)
     : 15;
   const esik = new Date(Date.now() - gun * 86400_000);
 
-  const allUsers = await db
+  let allUsers = await db
     .select()
     .from(users)
     .where(ne(users.status, "disabled"));
-  const assignments = await db
+  let assignments = await db
     .select({
       userId: userUnits.userId,
       unitName: units.name,
       bolgeLabel: units.bolgeLabel,
+      bolgeNo: units.bolgeNo,
     })
     .from(userUnits)
     .innerJoin(units, eq(userUnits.unitId, units.id));
+
+  if (bolgeNo) {
+    // Kapsam: bölge birimlerine atanmış temsilciler + bölge atamalı müdür/gönüllüler.
+    assignments = assignments.filter((a) => a.bolgeNo === bolgeNo);
+    const bolgeUnitUsers = new Set(assignments.map((a) => a.userId));
+    allUsers = allUsers.filter(
+      (u) =>
+        (u.role === "TEMSILCI" && bolgeUnitUsers.has(u.id)) ||
+        ((u.role === "BOLGE_MUDURU" ||
+          u.role === "GONULLU_YARDIM" ||
+          u.role === "GONULLU_BAGIS") &&
+          u.bolgeNo === bolgeNo),
+    );
+  }
   const loginRows = await db
     .select({ userId: auditLog.userId, adet: count() })
     .from(auditLog)
@@ -149,9 +168,13 @@ export default async function KullanimPage({
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-primary-dark">Kullanım Takibi</h1>
+          <h1 className="text-2xl font-semibold text-primary-dark">
+            Kullanım Takibi{bolgeNo ? ` — ${bolgeNo}.BÖLGE` : ""}
+          </h1>
           <p className="mt-1 text-sm text-ink/60">
-            Giriş kayıtlarına göre saha kullanımı. Devre dışı kullanıcılar sayıma dahil değildir.
+            {bolgeNo
+              ? "Bölgenizdeki temsilci ve sorumluların giriş kayıtları. Devre dışı kullanıcılar sayıma dahil değildir."
+              : "Giriş kayıtlarına göre saha kullanımı. Devre dışı kullanıcılar sayıma dahil değildir."}
           </p>
         </div>
         <div className="flex gap-2 text-sm">

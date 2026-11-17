@@ -26,12 +26,15 @@ export default async function AppLayout({
     user.role === "GONULLU_YARDIM" ||
     user.role === "GONULLU_BAGIS";
 
+  const mudur = user.role === "BOLGE_MUDURU";
+
   const mobileLinks: MobileNavLink[] = active
     ? ([
         !sahaRolu && { href: "/", label: "Özet", icon: "home" },
         canViewYardim(user) && { href: "/yardim", label: "Yardım", icon: "yardim" },
         canViewBagis(user) && { href: "/bagis", label: "Bağış", icon: "bagis" },
         isAnyAdmin(user) && { href: "/admin", label: "Yönetim", icon: "admin" },
+        mudur && { href: "/admin/kullanim", label: "Kullanım", icon: "admin" },
       ].filter(Boolean) as MobileNavLink[])
     : [];
 
@@ -40,6 +43,7 @@ export default async function AppLayout({
         canViewYardim(user) && { href: "/yardim", label: "Yardım Raporu" },
         canViewBagis(user) && { href: "/bagis", label: "Bağış Raporu" },
         isAnyAdmin(user) && { href: "/admin", label: "Yönetim" },
+        mudur && { href: "/admin/kullanim", label: "Kullanım Takibi" },
       ].filter(Boolean) as HeaderNavLink[])
     : [];
 

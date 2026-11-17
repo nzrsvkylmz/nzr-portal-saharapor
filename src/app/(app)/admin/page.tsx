@@ -4,6 +4,7 @@ import { requireActiveUser, isAdminBagis, isAdminYardim } from "@/lib/auth/dal";
 export default async function AdminHome() {
   const user = await requireActiveUser();
   const isSuper = user.role === "SUPER_ADMIN";
+  const isMudur = user.role === "BOLGE_MUDURU";
 
   const cards = [
     isSuper && {
@@ -26,10 +27,12 @@ export default async function AdminHome() {
       title: "Birimler",
       desc: "Organizasyon hiyerarşisi ve eşlenmeyen kayıtlar",
     },
-    isSuper && {
+    (isSuper || isMudur) && {
       href: "/admin/kullanim",
       title: "Kullanım Takibi",
-      desc: "Giriş logları: kim girdi, kim hiç girmedi — bölge bazlı saha raporu",
+      desc: isMudur
+        ? "Bölgenizdeki temsilci ve sorumluların giriş kayıtları"
+        : "Giriş logları: kim girdi, kim hiç girmedi — bölge bazlı saha raporu",
     },
   ].filter(Boolean) as Array<{ href: string; title: string; desc: string }>;
 

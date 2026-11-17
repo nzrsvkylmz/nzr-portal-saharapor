@@ -34,6 +34,9 @@ function fmtTime(d: Date | null): string {
 function bolgeOrder(label: string): number {
   const m = /^(\d+)\./.exec(label);
   if (m) return Number(m[1]);
+  // bölge tablosunun alt satırları: özel gruplar önce, en sonda kalanlar
+  if (label === "GENEL MERKEZ") return 898;
+  if (label === "YURTDIŞI") return 899;
   return label === "BELİRTİLMEMİŞ" ? 900 : 901;
 }
 

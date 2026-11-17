@@ -88,6 +88,17 @@ export default async function BirimlerPage({
     return hit?.name ?? "";
   }
 
+  /** Özel (coğrafi olmayan) gruplar: raporlarda bölge tablosunun altında kendi etiketiyle çıkar. */
+  const OZEL_GRUP_SECENEKLERI = [
+    ["gm", "GENEL MERKEZ"],
+    ["yd", "YURTDIŞI"],
+  ] as const;
+  const bolgeSecimi = (u: Unit): string | number => {
+    if (u.bolgeNo) return u.bolgeNo;
+    const ozel = OZEL_GRUP_SECENEKLERI.find(([, label]) => label === u.bolgeLabel);
+    return ozel?.[0] ?? "";
+  };
+
   function EditFields({ u }: { u: Unit }) {
     const suggestion = parentSuggestion(u);
     return (
@@ -104,11 +115,16 @@ export default async function BirimlerPage({
         </label>
         <label className="flex items-center gap-2">
           Bölge
-          <select name="bolgeNo" defaultValue={u.bolgeNo ?? ""} className={inputCls}>
+          <select name="bolgeNo" defaultValue={bolgeSecimi(u)} className={inputCls}>
             <option value="">—</option>
             {bolgeNos.map((b) => (
               <option key={b} value={b}>
                 {b}.BÖLGE
+              </option>
+            ))}
+            {OZEL_GRUP_SECENEKLERI.map(([v, t]) => (
+              <option key={v} value={v}>
+                {t}
               </option>
             ))}
           </select>
@@ -226,6 +242,11 @@ export default async function BirimlerPage({
               {bolgeNos.map((b) => (
                 <option key={b} value={b}>
                   {b}.BÖLGE
+                </option>
+              ))}
+              {OZEL_GRUP_SECENEKLERI.map(([v, t]) => (
+                <option key={v} value={v}>
+                  {t}
                 </option>
               ))}
             </select>

@@ -46,6 +46,30 @@ async function resolveUnitByName(name: string) {
   return hits[0];
 }
 
+/**
+ * Bölge seçimini (sayı ya da özel grup) bolgeNo+bolgeLabel çiftine çevirir.
+ * Özel gruplar coğrafi bölge değildir: bolgeNo boş kalır, raporlarda bölge
+ * tablosunun altında kendi etiketiyle gösterilir ve hiçbir saha kapsamına girmez.
+ */
+const OZEL_BOLGE_GRUPLARI: Record<string, string> = {
+  gm: "GENEL MERKEZ",
+  yd: "YURTDIŞI",
+};
+
+function parseBolgeSecimi(raw: string): {
+  bolgeNo: number | null;
+  bolgeLabel: string | null;
+} {
+  if (!raw) return { bolgeNo: null, bolgeLabel: null };
+  const ozel = OZEL_BOLGE_GRUPLARI[raw];
+  if (ozel) return { bolgeNo: null, bolgeLabel: ozel };
+  const bolgeNo = Number(raw);
+  if (!Number.isInteger(bolgeNo) || bolgeNo <= 0) {
+    throw new Error("Geçersiz bölge numarası.");
+  }
+  return { bolgeNo, bolgeLabel: `${bolgeNo}.BÖLGE` };
+}
+
 /** parent zinciri döngü kontrolü: newParentId'den yukarı çıkarken unitId görülmemeli. */
 async function assertNoCycle(unitId: number, newParentId: number): Promise<void> {
   const all = await db.select({ id: units.id, parentUnitId: units.parentUnitId }).from(units);
@@ -75,10 +99,7 @@ export async function updateUnit(formData: FormData): Promise<void> {
       parentUnitId = parent.id;
     }
 
-    const bolgeNo = bolgeNoRaw ? Number(bolgeNoRaw) : null;
-    if (bolgeNoRaw && (!Number.isInteger(bolgeNo) || bolgeNo! <= 0)) {
-      throw new Error("Geçersiz bölge numarası.");
-    }
+    const { bolgeNo, bolgeLabel } = parseBolgeSecimi(bolgeNoRaw);
 
     await db.transaction(async (tx) => {
       await tx
@@ -86,7 +107,7 @@ export async function updateUnit(formData: FormData): Promise<void> {
         .set({
           parentUnitId,
           bolgeNo,
-          bolgeLabel: bolgeNo ? `${bolgeNo}.BÖLGE` : null,
+          bolgeLabel,
           active,
           needsReview: false,
         })
@@ -94,7 +115,7 @@ export async function updateUnit(formData: FormData): Promise<void> {
       await tx.insert(auditLog).values({
         userId: admin.id,
         action: "unit_update",
-        detail: { unitId, parentUnitId, bolgeNo, active },
+        detail: { unitId, parentUnitId, bolgeNo, bolgeLabel, active },
       });
     });
   });
@@ -123,10 +144,7 @@ export async function createUnit(formData: FormData): Promise<void> {
       const parent = await resolveUnitByName(parentName);
       parentUnitId = parent.id;
     }
-    const bolgeNo = bolgeNoRaw ? Number(bolgeNoRaw) : null;
-    if (bolgeNoRaw && (!Number.isInteger(bolgeNo) || bolgeNo! <= 0)) {
-      throw new Error("Geçersiz bölge numarası.");
-    }
+    const { bolgeNo, bolgeLabel } = parseBolgeSecimi(bolgeNoRaw);
 
     await db.transaction(async (tx) => {
       const [created] = await tx
@@ -135,7 +153,7 @@ export async function createUnit(formData: FormData): Promise<void> {
           depId: `manuel:${key}`,
           name,
           bolgeNo,
-          bolgeLabel: bolgeNo ? `${bolgeNo}.BÖLGE` : null,
+          bolgeLabel,
           isBolgeMudurlugu: false,
           cityKey: null,
           districtKey: null,

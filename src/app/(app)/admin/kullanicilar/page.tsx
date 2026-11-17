@@ -4,11 +4,13 @@ import { db } from "@/lib/db";
 import { units, userUnits, users } from "@/lib/db/schema";
 import {
   createManualUser,
+  deleteUser,
   importBolgeMudurleri,
   importMuhasebe,
   importTemsilciler,
   updateUserAccess,
 } from "./actions";
+import { DeleteButton } from "./DeleteButton";
 import { ImportButton } from "./ImportButton";
 
 const ROLE_OPTIONS = [
@@ -115,6 +117,24 @@ export default async function KullanicilarPage({
           </div>
           <div className="flex flex-wrap gap-3 text-sm">
             <label className="flex items-center gap-2">
+              Ad Soyad
+              <input
+                name="displayName"
+                defaultValue={user.displayName ?? ""}
+                placeholder={user.portalNick}
+                className="w-40 rounded-lg border border-mint px-2 py-1"
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              Portal adı
+              <input
+                name="portalNick"
+                required
+                defaultValue={user.portalNick}
+                className="w-36 rounded-lg border border-mint px-2 py-1"
+              />
+            </label>
+            <label className="flex items-center gap-2">
               Rol
               <select
                 name="role"
@@ -200,13 +220,16 @@ export default async function KullanicilarPage({
             </div>
           </details>
         </div>
-        <div className="flex items-start justify-end">
+        <div className="flex flex-col items-end gap-2">
           <button
             type="submit"
             className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark"
           >
             Kaydet
           </button>
+          {(user.status === "pending" || !user.role) && (
+            <DeleteButton action={deleteUser} nick={user.portalNick} />
+          )}
         </div>
       </form>
     );

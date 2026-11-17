@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/dal";
@@ -33,6 +33,8 @@ export async function updateUserAccess(formData: FormData): Promise<void> {
     const roleRaw = String(formData.get("role") ?? "");
     const statusRaw = String(formData.get("status") ?? "active");
     const bolgeNoRaw = String(formData.get("bolgeNo") ?? "");
+    const nick = String(formData.get("portalNick") ?? "").trim().toLowerCase();
+    const displayName = String(formData.get("displayName") ?? "").trim();
     // birimler: işaretli kalanlar + ada göre eklenenler (paylaşımlı datalist)
     const keepIds = formData
       .getAll("keepUnitIds")
@@ -55,6 +57,7 @@ export async function updateUserAccess(formData: FormData): Promise<void> {
     const unitIds = [...new Set([...keepIds, ...addIds])];
 
     if (!userId) throw new Error("Kullanıcı seçilmedi.");
+    if (!nick) throw new Error("Portal kullanıcı adı boş olamaz.");
     const role = ROLES.includes(roleRaw as Role) ? (roleRaw as Role) : null;
     const status =
       statusRaw === "disabled" ? "disabled" : role ? "active" : "pending";
@@ -68,10 +71,25 @@ export async function updateUserAccess(formData: FormData): Promise<void> {
       throw new Error("Temsilci için en az bir birim seçilmelidir.");
     }
 
+    // nick login eşleşme anahtarıdır: başka kullanıcıyla çakışamaz
+    const [nickSahibi] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.portalNick, nick), ne(users.id, userId)));
+    if (nickSahibi) {
+      throw new Error(`"${nick}" başka bir kullanıcıda kayıtlı.`);
+    }
+
     await db.transaction(async (tx) => {
       await tx
         .update(users)
-        .set({ role, status, bolgeNo })
+        .set({
+          role,
+          status,
+          bolgeNo,
+          portalNick: nick,
+          displayName: displayName || nick,
+        })
         .where(eq(users.id, userId));
       await tx.delete(userUnits).where(eq(userUnits.userId, userId));
       if (role === "TEMSILCI" && unitIds.length) {
@@ -82,7 +100,7 @@ export async function updateUserAccess(formData: FormData): Promise<void> {
       await tx.insert(auditLog).values({
         userId: admin.id,
         action: "user_access_update",
-        detail: { target: userId, role, status, bolgeNo, unitIds },
+        detail: { target: userId, role, status, bolgeNo, unitIds, nick, displayName },
       });
     });
   } catch (e) {
@@ -91,6 +109,53 @@ export async function updateUserAccess(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/kullanicilar");
   if (hata) redirect(`/admin/kullanicilar?hata=${encodeURIComponent(hata)}`);
+}
+
+/**
+ * Onay bekleyen (rolü atanmamış) kullanıcıyı kalıcı siler — genelde yanlış
+ * kullanıcı adıyla açılan kayıtlar için. Rollü kullanıcı silinmez; yanlışlıkla
+ * veri kaybını önlemek için önce rolün kaldırılması gerekir. Oturum ve birim
+ * atamaları cascade ile gider; audit geçmişi anonimleştirilerek korunur.
+ */
+export async function deleteUser(formData: FormData): Promise<void> {
+  const admin = await requireRole("SUPER_ADMIN");
+
+  let mesaj: string | null = null;
+  let hata: string | null = null;
+  try {
+    const userId = String(formData.get("userId") ?? "");
+    if (!userId) throw new Error("Kullanıcı seçilmedi.");
+    const [target] = await db.select().from(users).where(eq(users.id, userId));
+    if (!target) throw new Error("Kullanıcı bulunamadı.");
+    if (target.role && target.status !== "pending") {
+      throw new Error(
+        "Yalnız onay bekleyen kullanıcılar silinebilir. Silmek için önce rolünü boşaltıp kaydedin.",
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(auditLog)
+        .set({ userId: null })
+        .where(eq(auditLog.userId, userId));
+      await tx.delete(users).where(eq(users.id, userId));
+      await tx.insert(auditLog).values({
+        userId: admin.id,
+        action: "user_delete",
+        detail: { target: userId, nick: target.portalNick, displayName: target.displayName },
+      });
+    });
+    mesaj = `"${target.portalNick}" kalıcı olarak silindi.`;
+  } catch (e) {
+    hata = e instanceof Error ? e.message : String(e);
+  }
+
+  revalidatePath("/admin/kullanicilar");
+  redirect(
+    hata
+      ? `/admin/kullanicilar?hata=${encodeURIComponent(hata)}`
+      : `/admin/kullanicilar?mesaj=${encodeURIComponent(mesaj ?? "")}`,
+  );
 }
 
 /**

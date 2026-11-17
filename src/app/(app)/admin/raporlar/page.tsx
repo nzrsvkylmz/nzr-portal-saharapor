@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { requireActiveUser, isAdminBagis, isAdminYardim } from "@/lib/auth/dal";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { portalSessions, reportRuns } from "@/lib/db/schema";
+import { portalSessions, reportRuns, users } from "@/lib/db/schema";
 import { BagisForm, YardimForm } from "./forms";
 
 function fmtTime(d: Date | null): string {
@@ -38,18 +38,21 @@ export default async function RaporlarPage() {
   const portalOk = portal?.state === "authenticated";
 
   // Son güncellemeler: herkes yalnız kendi alanının loglarını görür
-  const lastRuns = (
-    await db
-      .select()
-      .from(reportRuns)
-      .where(
-        canBagis && canYardim
-          ? undefined
-          : eq(reportRuns.kind, canBagis ? "bagis" : "yardim"),
-      )
-      .orderBy(desc(reportRuns.createdAt))
-      .limit(10)
-  );
+  const lastRuns = await db
+    .select({
+      run: reportRuns,
+      adSoyad: users.displayName,
+      nick: users.portalNick,
+    })
+    .from(reportRuns)
+    .leftJoin(users, eq(reportRuns.triggeredBy, users.id))
+    .where(
+      canBagis && canYardim
+        ? undefined
+        : eq(reportRuns.kind, canBagis ? "bagis" : "yardim"),
+    )
+    .orderBy(desc(reportRuns.createdAt))
+    .limit(10);
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -98,6 +101,7 @@ export default async function RaporlarPage() {
             <thead>
               <tr className="bg-primary text-left text-white">
                 <th className="px-4 py-2.5 font-medium">Tür</th>
+                <th className="px-4 py-2.5 font-medium">Güncelleyen</th>
                 <th className="px-4 py-2.5 font-medium">Durum</th>
                 <th className="px-4 py-2.5 font-medium">Kayıt</th>
                 <th className="px-4 py-2.5 font-medium">Başlangıç</th>
@@ -108,15 +112,22 @@ export default async function RaporlarPage() {
             <tbody>
               {lastRuns.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-ink/50">
+                  <td colSpan={7} className="px-4 py-6 text-center text-ink/50">
                     Henüz güncelleme yapılmadı.
                   </td>
                 </tr>
               )}
-              {lastRuns.map((r, i) => (
+              {lastRuns.map(({ run: r, adSoyad, nick }, i) => (
                 <tr key={r.id} className={i % 2 ? "bg-cream/60" : ""}>
                   <td className="px-4 py-2">
                     {r.kind === "bagis" ? "Bağış" : "Yardım"}
+                  </td>
+                  <td className="px-4 py-2 text-xs">
+                    {r.isCron ? (
+                      <span className="text-ink/50">otomatik (zamanlanmış)</span>
+                    ) : (
+                      (adSoyad ?? nick ?? "—")
+                    )}
                   </td>
                   <td className="px-4 py-2">
                     <span

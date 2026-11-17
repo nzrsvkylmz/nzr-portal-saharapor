@@ -16,6 +16,21 @@ import { norm } from "@/lib/domain/normalize";
 import type { NezirClient } from "@/lib/portal/client";
 import { fetchDepartments } from "@/lib/portal/departments";
 
+/**
+ * Admin'in atadığı özel (coğrafi olmayan) gruplar: portal ağacında karşılığı
+ * yoktur. Portal bölge bilgisi vermiyorsa senkron bu etiketi EZMEZ; portal
+ * gerçek bir bölge veriyorsa portal kazanır.
+ */
+const OZEL_GRUPLAR = new Set(["GENEL MERKEZ", "YURTDIŞI"]);
+
+function korunanBolgeLabel(
+  mevcut: string | null,
+  gelen: string | null,
+): string | null {
+  if (gelen) return gelen;
+  return mevcut && OZEL_GRUPLAR.has(mevcut) ? mevcut : null;
+}
+
 export interface BagisUnitSyncResult {
   toplam: number;
   yeni: number;
@@ -47,7 +62,7 @@ export async function syncBagisUnits(client: NezirClient): Promise<BagisUnitSync
           .set({
             name: e.name,
             bolgeNo: e.bolgeNo,
-            bolgeLabel: e.bolgeLabel,
+            bolgeLabel: korunanBolgeLabel(existing.bolgeLabel, e.bolgeLabel),
             isBolgeMudurlugu: e.isBolgeMudurlugu,
             bagisBirimi: true,
             syncedAt: new Date(),
@@ -65,7 +80,7 @@ export async function syncBagisUnits(client: NezirClient): Promise<BagisUnitSync
             depId: e.depId,
             name: e.name,
             bolgeNo: e.bolgeNo,
-            bolgeLabel: e.bolgeLabel,
+            bolgeLabel: korunanBolgeLabel(synth.bolgeLabel, e.bolgeLabel),
             isBolgeMudurlugu: e.isBolgeMudurlugu,
             source: "portal",
             bagisBirimi: true,
